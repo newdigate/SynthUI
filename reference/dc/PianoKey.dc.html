@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" width="{{ w }}" height="{{ h }}" onClick="{{ onPress }}" style="display:block;cursor:pointer">
+  <defs>
+    <linearGradient id="{{ bodyId }}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="{{ bodyA }}"></stop>
+      <stop offset="0.32" stop-color="{{ bodyB }}"></stop>
+      <stop offset="1" stop-color="{{ bodyC }}"></stop>
+    </linearGradient>
+    <linearGradient id="{{ padId }}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ececeb"></stop>
+      <stop offset="0.4" stop-color="#c4c4c1"></stop>
+      <stop offset="1" stop-color="#8f918f"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="100" height="{{ vh }}" rx="{{ bodyR }}" fill="url(#{{ bodyId }})" stroke="{{ edge }}" stroke-width="{{ edgeW }}"></rect>
+  <rect x="{{ shadeX }}" y="0" width="{{ shadeW }}" height="{{ vh }}" fill="#000000" opacity="{{ shadeA }}"></rect>
+  <circle cx="50" cy="{{ ledY }}" r="{{ ledR }}" fill="{{ ledFill }}" stroke="{{ ledGlowC }}" stroke-width="{{ ledGlowW }}" stroke-opacity="{{ ledGlowA }}"></circle>
+  <g transform="{{ padT }}">
+    <rect x="1.5" y="2" width="{{ padW }}" height="{{ padH }}" rx="2.5" fill="#000000" opacity="0.35"></rect>
+    <rect x="0" y="0" width="{{ padW }}" height="{{ padH }}" rx="2.5" fill="url(#{{ padId }})" stroke="#3a3c3c" stroke-width="1.4"></rect>
+    <g stroke="#7d807e" stroke-width="{{ ridgeW }}" stroke-linecap="round">
+      <sc-for list="{{ ridges }}" as="r" hint-placeholder-count="4">
+        <line x1="{{ r.x1 }}" y1="{{ r.y }}" x2="{{ r.x2 }}" y2="{{ r.y }}"></line>
+      </sc-for>
+    </g>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:110,&quot;height&quot;:250},&quot;type&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;white&quot;,&quot;options&quot;:[&quot;white&quot;,&quot;black&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;lit&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;pressed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;zoneTop&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.58,&quot;min&quot;:0.04,&quot;max&quot;:0.8,&quot;step&quot;:0.02,&quot;tsType&quot;:&quot;number&quot;},&quot;padHeight&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:48,&quot;min&quot;:10,&quot;max&quot;:160,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:62,&quot;min&quot;:18,&quot;max&quot;:200,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:210,&quot;min&quot;:60,&quot;max&quot;:520,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;onPress&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const w = Number(this.props.w ?? 62);
+    const h = Number(this.props.h ?? 210);
+    const vh = Math.round((100 * h) / w);
+    const black = this.props.type === 'black';
+    const lit = !!this.props.lit;
+    const pressed = !!this.props.pressed;
+    const zone = Number(this.props.zoneTop ?? (black ? 0.1 : 0.58));
+    const dy = pressed ? vh * 0.012 : 0;
+
+    const ledY = vh * (zone + 0.055) + dy;
+    const ledR = Math.min(14, vh * 0.032 + 4);
+    const padTop = vh * (zone + 0.14) + dy;
+    const padH = this.props.padHeight ? Number(this.props.padHeight) * (100 / w) : vh * 0.94 - padTop;
+    const padW = 62;
+
+    const ridges = [0.22, 0.42, 0.62, 0.82].map((f) => ({
+      y: Math.round(padH * f * 10) / 10, x1: padW * 0.16, x2: padW * 0.84,
+    }));
+
+    return {
+      w, h, vh, viewBox: `0 0 100 ${vh}`, bodyId: 'k' + (black ? 'b' : 'w') + Math.round(w) + (pressed ? 1 : 0),
+      padId: 'p' + Math.round(w),
+      bodyR: black ? 3 : 4,
+      bodyA: black ? '#2b2b2b' : pressed ? '#dcdad5' : '#f6f5f2',
+      bodyB: black ? '#141414' : pressed ? '#cfcdc8' : '#eae8e3',
+      bodyC: black ? '#0b0b0b' : pressed ? '#b2b0ab' : '#c7c5c0',
+      edge: black ? '#000000' : '#4a4a48', edgeW: black ? 1.6 : 1.8,
+      shadeX: 78, shadeW: 22, shadeA: black ? 0.25 : 0.07,
+      ledY, ledR,
+      ledFill: lit ? '#ff2a20' : '#5c1c17',
+      ledGlowC: '#ff2a20', ledGlowW: lit ? ledR * 1.5 : 0, ledGlowA: lit ? 0.34 : 0,
+      padT: `translate(19 ${Math.round(padTop * 10) / 10})`,
+      padW, padH, ridges, ridgeW: Math.max(1, padH * 0.035),
+      onPress: this.props.onPress,
+    };
+  }
+}
+</script>
+</body>
+</html>

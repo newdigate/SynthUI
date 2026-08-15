@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · mixer fader · pan &amp; level</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Fader on a ruled slot</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">A dark rod through a ruled panel, and a ridged cap that translates along it. The rod, the rules and the panel are drawn once with an identity matrix; the value moves the cap and nothing else, so a bank of sixteen costs sixteen translates.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">float value 0…1</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">cap = 6 rects</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">rules are static</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#39434b;padding:34px 36px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+      <sc-for list="{{ channels }}" as="c" hint-placeholder-count="8">
+        <div style="display:flex;flex-direction:column;gap:10px;align-items:center;background:#4d5862;padding:14px 10px 12px;border-radius:4px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#dfe6e9">{{ c.name }}</span>
+          <dc-import name="Knob" size="{{ 44 }}" angle="{{ c.knob }}" mode="bounded" hint-size="44px,44px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.12em;color:#aab6bd">PAN</span>
+          <div onPointerDown="{{ c.down }}" onPointerMove="{{ c.move }}" onPointerUp="{{ c.up }}" style="touch-action:none">
+            <dc-import name="Fader" value="{{ c.pan }}" w="{{ 32 }}" h="{{ 96 }}" ticks="{{ 7 }}" center="{{ true }}" state="{{ c.state }}" hint-size="32px,96px"></dc-import>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.12em;color:#aab6bd">LEVEL</span>
+          <div onPointerDown="{{ c.downL }}" onPointerMove="{{ c.moveL }}" onPointerUp="{{ c.up }}" style="touch-action:none">
+            <dc-import name="Fader" value="{{ c.level }}" w="{{ 32 }}" h="{{ 168 }}" ticks="{{ 13 }}" state="{{ c.stateL }}" hint-size="32px,168px"></dc-import>
+          </div>
+          <dc-import name="SevenSegment" text="{{ c.readout }}" size="{{ 24 }}" accent="cyan" hint-size="66px,26px"></dc-import>
+          <dc-import name="LedButton" size="{{ 34 }}" lit="{{ c.mute }}" color="amber" onPress="{{ c.toggleMute }}" hint-size="34px,34px"></dc-import>
+        </div>
+      </sc-for>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">drag any cap · pan reads L/C/r, level reads dB · amber key mutes the channel</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · States</h2>
+      <span style="font-size:14px;color:#6f7396">Cap gradient and gloss alpha only — the slot never changes.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="background:#39434b;padding:24px;display:flex;justify-content:center">
+            <dc-import name="Fader" value="{{ s.value }}" w="{{ 37 }}" h="{{ 190 }}" ticks="{{ 13 }}" center="{{ s.center }}" state="{{ s.state }}" hint-size="37px,190px"></dc-import>
+          </div>
+          <div style="padding:15px 17px 17px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Lengths &amp; rule density</h2>
+      <span style="font-size:14px;color:#6f7396">Rules are spaced across the travel, so a short throw simply gets fewer of them.</span>
+    </div>
+    <div style="background:#39434b;border-radius:5px;padding:34px 36px;display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap">
+      <sc-for list="{{ lengths }}" as="l" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="Fader" value="{{ l.value }}" w="{{ l.w }}" h="{{ l.h }}" ticks="{{ l.ticks }}" hint-size="35px,180px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#aab6bd">{{ l.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Draw list</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="7">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b;max-width:62ch">The dirty rectangle for a fader move is the cap plus its drop shadow — about 11% of the slot — so a whole bank can be dragged at frame rate without re-uploading a single path.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Replaces</h2>
+      </div>
+      <div style="display:flex;gap:20px;align-items:flex-start">
+        <img src="crop-fader.png" alt="original mixer fader" style="width:150px;image-rendering:pixelated;border-radius:4px"></img>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+          <div>photographed strip · 158×264</div>
+          <div>cap baked into the panel art</div>
+          <div>one throw length · one tick count</div>
+          <div style="color:#22243c;font-weight:500;margin-top:10px">vector · 9 primitives</div>
+          <div style="color:#22243c;font-weight:500">any throw · any density</div>
+        </div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: the blue-grey panel, the pale rules running the full slot width, the near-black rod, and the cap's dark waist between two glosses. Dropped: the baked shadow and the fixed throw — the cap now casts its own offset shadow so it can sit anywhere.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;ticks&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:13,&quot;min&quot;:2,&quot;max&quot;:33,&quot;tsType&quot;:&quot;number&quot;}}">
+const NAMES = ['BD', 'SD', 'LT', 'MT', 'HT', 'RS', 'CP', 'CY'];
+const clamp = (v) => Math.max(0, Math.min(1, v));
+
+class Component extends DCLogic {
+  state = {
+    pan: NAMES.map((_, i) => 0.5 + (i % 3 - 1) * 0.22),
+    level: NAMES.map((_, i) => 0.4 + ((i * 7) % 5) * 0.12),
+    mute: NAMES.map(() => false),
+    drag: null,
+  };
+
+  grab(e, i, key) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    this.setState({ drag: key + i });
+    this.apply(e, i, key);
+  }
+  apply(e, i, key) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const pad = r.height * 0.11;
+    const v = clamp(1 - (e.clientY - r.top - pad) / (r.height - pad * 2));
+    this.setState((s) => { const a = s[key].slice(); a[i] = v; return { [key]: a }; });
+  }
+  panText(v) {
+    const n = Math.round((v - 0.5) * 200);
+    if (Math.abs(n) < 3) return '  C';
+    return (n < 0 ? 'L' : 'r') + String(Math.abs(n)).padStart(2, ' ');
+  }
+
+  renderVals() {
+    const s = this.state;
+    return {
+      channels: NAMES.map((name, i) => ({
+        name, pan: s.pan[i], level: s.level[i], mute: s.mute[i],
+        knob: -140 + s.level[i] * 280,
+        readout: s.mute[i] ? ' - ' : this.panText(s.pan[i]),
+        state: s.drag === 'pan' + i ? 'active' : s.mute[i] ? 'disabled' : 'idle',
+        stateL: s.drag === 'level' + i ? 'active' : s.mute[i] ? 'disabled' : 'idle',
+        down: (e) => this.grab(e, i, 'pan'),
+        move: (e) => { if (s.drag === 'pan' + i) this.apply(e, i, 'pan'); },
+        downL: (e) => this.grab(e, i, 'level'),
+        moveL: (e) => { if (s.drag === 'level' + i) this.apply(e, i, 'level'); },
+        up: () => this.setState({ drag: null }),
+        toggleMute: () => this.setState((p) => { const m = p.mute.slice(); m[i] = !m[i]; return { mute: m }; }),
+      })),
+      states: [
+        { name: 'idle', value: 0.62, state: 'idle', center: false, note: 'Cap reads as lit from above: bright top, dark waist, grey base.' },
+        { name: 'active', value: 0.62, state: 'active', center: false, note: 'Held. Top stop goes to pure white and the base darkens — the cap catches more light, it does not grow.' },
+        { name: 'centre detent', value: 0.5, state: 'idle', center: true, note: 'Pan slots get one heavy rule at the midpoint; the value stays float either side of it.' },
+        { name: 'unity', value: 1, state: 'idle', center: false, note: 'Top of travel. The cap never leaves the slot — travel is inset by half a cap at each end.' },
+        { name: 'disabled', value: 0.3, state: 'disabled', center: false, note: 'Muted channel: cap desaturates, gloss drops to 30% α, rules dim with it.' },
+      ],
+      lengths: [
+        { w: 30, h: 88, ticks: 5, value: 0.5, label: '88 · pan' },
+        { w: 30, h: 130, ticks: 9, value: 0.45, label: '130' },
+        { w: 35, h: 180, ticks: 13, value: 0.6, label: '180 · channel' },
+        { w: 41, h: 250, ticks: 17, value: 0.72, label: '250 · master' },
+        { w: 48, h: 320, ticks: 25, value: 0.55, label: '320 · long throw' },
+      ],
+      drawList: [
+        { a: 'panel', b: 'rect, flat fill', c: 'static' },
+        { a: 'rules', b: 'n × line, 34% / 62% α', c: 'static' },
+        { a: 'rod', b: 'rect r1.5, #14181b', c: 'static' },
+        { a: 'centre rule', b: 'line w2.4, pan only', c: 'static' },
+        { a: 'cap shadow', b: 'rect r2, 45% α, +2 offset', c: 'translate' },
+        { a: 'cap', b: 'rect r2 + linear grad + stroke', c: 'translate' },
+        { a: 'waist + 2 glosses', b: '3 × rect', c: 'translate' },
+      ],
+      snippet:
+        'float v = clampf(value, 0.f, 1.f);\n' +
+        'float y = top + (1.f - v) * travel;\n\n' +
+        '/* slot: drawn once, identity */\n' +
+        'draw_slot(rt, &slot, &id);\n\n' +
+        'vg_lite_identity(&m);\n' +
+        'vg_lite_translate(x, y, &m);\n' +
+        'vg_lite_draw_gradient(rt, &cap,\n' +
+        '    VG_LITE_FILL_NON_ZERO, &m,\n' +
+        '    held ? grad_hot : grad_cap,\n' +
+        '    VG_LITE_BLEND_SRC_OVER);',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" height="{{ px }}" style="display:block;overflow:visible">
+  <sc-for list="{{ cells }}" as="c" hint-placeholder-count="4">
+    <g transform="{{ c.t }}">
+      <sc-for list="{{ c.segs }}" as="s" hint-placeholder-count="7">
+        <path d="{{ s.d }}" fill="{{ s.fill }}" stroke="{{ s.stroke }}" stroke-width="{{ s.sw }}" stroke-opacity="{{ s.so }}" stroke-linejoin="round"></path>
+      </sc-for>
+      <sc-if value="{{ c.dot }}" hint-placeholder-val="{{ false }}">
+        <circle cx="72" cy="100" r="7" fill="{{ c.dotFill }}" stroke="{{ c.dotStroke }}" stroke-width="7" stroke-opacity="{{ c.dotGlow }}"></circle>
+      </sc-if>
+      <sc-if value="{{ c.colon }}" hint-placeholder-val="{{ false }}">
+        <g fill="{{ c.dotFill }}" stroke="{{ c.dotStroke }}" stroke-width="6" stroke-opacity="{{ c.dotGlow }}">
+          <circle cx="70" cy="38" r="6"></circle>
+          <circle cx="70" cy="76" r="6"></circle>
+        </g>
+      </sc-if>
+    </g>
+  </sc-for>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:140},&quot;text&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;140.0&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:96,&quot;min&quot;:16,&quot;max&quot;:320,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;blue&quot;,&quot;options&quot;:[&quot;blue&quot;,&quot;cyan&quot;,&quot;amber&quot;,&quot;red&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;ghost&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;slant&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:6,&quot;min&quot;:0,&quot;max&quot;:14,&quot;step&quot;:1,&quot;unit&quot;:&quot;°&quot;,&quot;tsType&quot;:&quot;number&quot;}}">
+const T = 12, ADV = 76, H = 112;
+const h = (x, y, L) => { const t = T / 2; return `M${x} ${y}L${x + t} ${y - t}L${x + L - t} ${y - t}L${x + L} ${y}L${x + L - t} ${y + t}L${x + t} ${y + t}Z`; };
+const v = (x, y, L) => { const t = T / 2; return `M${x} ${y}L${x + t} ${y + t}L${x + t} ${y + L - t}L${x} ${y + L}L${x - t} ${y + L - t}L${x - t} ${y + t}Z`; };
+const PATH = {
+  a: h(15, 12, 34), b: v(58, 15, 38), c: v(58, 59, 38),
+  d: h(15, 100, 34), e: v(12, 59, 38), f: v(12, 15, 38), g: h(15, 56, 34),
+};
+const MAP = {
+  '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc',
+  '5': 'afgcd', '6': 'afgecd', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg',
+  '-': 'g', 'A': 'abcefg', 'b': 'cdefg', 'C': 'adef', 'd': 'bcdeg',
+  'E': 'adefg', 'F': 'aefg', 'P': 'abefg', 'L': 'def', 'o': 'cdeg',
+  'r': 'eg', 'n': 'ceg', 'U': 'bcdef', 'H': 'bcefg', 't': 'defg',
+  'S': 'afgcd', 'u': 'cde', 'q': 'abcfg', 'J': 'bcd', 'y': 'bcdfg',
+  ' ': '', '_': 'd',
+};
+const ACCENT = {
+  blue: { on: '#dcecff', glow: '#90a8f0' },
+  cyan: { on: '#d8f0f0', glow: '#78c8d8' },
+  amber: { on: '#ffe0a8', glow: '#f0a030' },
+  red: { on: '#ffc8c0', glow: '#e04848' },
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const text = String(this.props.text ?? '888');
+    const px = Number(this.props.size ?? 96);
+    const slant = Number(this.props.slant ?? 6);
+    const ghost = this.props.ghost !== false;
+    const acc = ACCENT[this.props.accent ?? 'blue'] ?? ACCENT.blue;
+    const offFill = ghost ? (this.props.offFill ?? 'rgba(144,168,240,0.11)') : 'transparent';
+
+    // split into cells; '.' and ':' attach to the preceding digit
+    const cells = [];
+    for (const ch of text) {
+      if ((ch === '.' || ch === ':') && cells.length) {
+        cells[cells.length - 1][ch === '.' ? 'dot' : 'colon'] = true;
+      } else cells.push({ ch, dot: false, colon: false });
+    }
+    if (!cells.length) cells.push({ ch: ' ', dot: false, colon: false });
+
+    const out = cells.map((cell, i) => {
+      const lit = MAP[cell.ch] ?? '';
+      const wide = cell.dot || cell.colon;
+      const x = cells.slice(0, i).reduce((s, c) => s + (c.dot || c.colon ? ADV + 22 : ADV), 0);
+      return {
+        t: `translate(${x} 0) skewX(-${slant})`,
+        dot: cell.dot, colon: cell.colon,
+        dotFill: acc.on, dotStroke: acc.glow, dotGlow: 0.3,
+        wide,
+        segs: 'abcdefg'.split('').map((k) => {
+          const on = lit.includes(k);
+          return { d: PATH[k], fill: on ? acc.on : offFill, stroke: on ? acc.glow : 'none', sw: on ? 7 : 0, so: on ? 0.28 : 0 };
+        }),
+      };
+    });
+
+    const totalW = out.reduce((s, c) => s + (c.wide ? ADV + 22 : ADV), 0) + H * slant / 90;
+    return { cells: out, px, viewBox: `0 0 ${Math.round(totalW)} ${H}` };
+  }
+}
+</script>
+</body>
+</html>

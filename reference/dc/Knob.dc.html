@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="0 0 100 100" width="{{ px }}" height="{{ px }}" style="display:block;overflow:visible">
+  <defs>
+    <linearGradient id="{{ faceId }}" x1="0.15" y1="0" x2="0.75" y2="1">
+      <stop offset="0" stop-color="{{ faceFrom }}"></stop>
+      <stop offset="1" stop-color="{{ faceTo }}"></stop>
+    </linearGradient>
+    <linearGradient id="{{ cresId }}" gradientUnits="userSpaceOnUse" x1="18" y1="14" x2="84" y2="88">
+      <stop offset="0" stop-color="{{ cresFrom }}"></stop>
+      <stop offset="0.55" stop-color="{{ cresMid }}"></stop>
+      <stop offset="1" stop-color="{{ cresTo }}"></stop>
+    </linearGradient>
+  </defs>
+  <g opacity="{{ alpha }}">
+    <g stroke="{{ tickColor }}" stroke-linecap="butt">
+      <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="8">
+        <line x1="{{ t.x1 }}" y1="{{ t.y1 }}" x2="{{ t.x2 }}" y2="{{ t.y2 }}" stroke-width="{{ t.w }}"></line>
+      </sc-for>
+    </g>
+    <sc-if value="{{ hasDetents }}" hint-placeholder-val="{{ false }}">
+      <g stroke="{{ detentColor }}" stroke-width="2" stroke-linecap="round">
+        <sc-for list="{{ detents }}" as="d" hint-placeholder-count="0">
+          <line x1="{{ d.x1 }}" y1="{{ d.y1 }}" x2="{{ d.x2 }}" y2="{{ d.y2 }}"></line>
+        </sc-for>
+      </g>
+    </sc-if>
+    <sc-if value="{{ hasStops }}" hint-placeholder-val="{{ false }}">
+      <g stroke="{{ stopColor }}" stroke-width="3.4" stroke-linecap="round">
+        <sc-for list="{{ stops }}" as="s" hint-placeholder-count="0">
+          <line x1="{{ s.x1 }}" y1="{{ s.y1 }}" x2="{{ s.x2 }}" y2="{{ s.y2 }}"></line>
+        </sc-for>
+      </g>
+    </sc-if>
+    <sc-if value="{{ hasArc }}" hint-placeholder-val="{{ false }}">
+      <g fill="none" stroke-linecap="butt">
+        <path d="{{ trackPath }}" stroke="{{ trackColor }}" stroke-width="3.2"></path>
+        <path d="{{ arcPath }}" stroke="{{ arcColor }}" stroke-width="3.2"></path>
+      </g>
+    </sc-if>
+    <circle cx="50" cy="50" r="33" fill="url(#{{ faceId }})" stroke="{{ ringColor }}" stroke-width="2.6"></circle>
+    <path d="{{ crescent }}" fill="url(#{{ cresId }})"></path>
+    <circle cx="{{ pointerX }}" cy="{{ pointerY }}" r="{{ pointerR }}" fill="{{ pointerColor }}"></circle>
+    <circle cx="50" cy="50" r="20" fill="{{ capFill }}" opacity="0.55"></circle>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:160,&quot;height&quot;:160},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:120,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:24,&quot;max&quot;:320,&quot;unit&quot;:&quot;px&quot;},&quot;angle&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:-360,&quot;max&quot;:360,&quot;unit&quot;:&quot;°&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;endless&quot;,&quot;options&quot;:[&quot;endless&quot;,&quot;bounded&quot;,&quot;detents&quot;,&quot;arc&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;idle&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;active&quot;,&quot;focus&quot;,&quot;disabled&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;sweep&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:215,&quot;min&quot;:60,&quot;max&quot;:330,&quot;step&quot;:5,&quot;tsType&quot;:&quot;number&quot;,&quot;unit&quot;:&quot;°&quot;},&quot;ticks&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:8,&quot;min&quot;:0,&quot;max&quot;:24,&quot;tsType&quot;:&quot;number&quot;},&quot;min&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-140,&quot;tsType&quot;:&quot;number&quot;},&quot;max&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:140,&quot;tsType&quot;:&quot;number&quot;},&quot;detentStep&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:35,&quot;tsType&quot;:&quot;number&quot;}}">
+const D = Math.PI / 180;
+const P = (r, th) => [50 + r * Math.sin(th * D), 50 - r * Math.cos(th * D)];
+const f = (n) => Math.round(n * 100) / 100;
+
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.uid = 'k' + Math.random().toString(36).slice(2, 8);
+  }
+  renderVals() {
+    const px = Number(this.props.size ?? 120);
+    const angle = Number(this.props.angle ?? 0);
+    const mode = this.props.mode ?? 'endless';
+    const state = this.props.state ?? 'idle';
+    const sweep = Math.max(30, Math.min(340, Number(this.props.sweep ?? 215)));
+    const tickCount = Math.max(0, Number(this.props.ticks ?? 8));
+    const min = Number(this.props.min ?? -140);
+    const max = Number(this.props.max ?? 140);
+    const detentStep = Number(this.props.detentStep ?? 35);
+
+    const disabled = state === 'disabled';
+    const active = state === 'active';
+    const focus = state === 'focus';
+
+    // tick ring — fixed geometry, never rotates
+    // decorated modes own the outer band; keep only the top orientation marker
+    const effTicks = mode === 'endless' ? tickCount : 1;
+    const ticks = [];
+    for (let i = 0; i < effTicks; i++) {
+      const th = (i * 360) / effTicks;
+      const major = i === 0;
+      const [x1, y1] = P(37.5, th);
+      const [x2, y2] = P(major ? 49 : 45.5, th);
+      ticks.push({ x1: f(x1), y1: f(y1), x2: f(x2), y2: f(y2), w: major ? 3.4 : 2.4 });
+    }
+
+    // rotating crescent: one annulus sector, 2 arcs + 2 lines
+    // rotation is baked into the endpoints so the gradient axis stays world-fixed
+    const a1 = angle - sweep / 2, a2 = angle + sweep / 2, big = sweep > 180 ? 1 : 0;
+    const [ox1, oy1] = P(30, a1), [ox2, oy2] = P(30, a2);
+    const [ix2, iy2] = P(21, a2), [ix1, iy1] = P(21, a1);
+    const crescent =
+      `M${f(ox1)} ${f(oy1)} A30 30 0 ${big} 1 ${f(ox2)} ${f(oy2)}` +
+      ` L${f(ix2)} ${f(iy2)} A21 21 0 ${big} 0 ${f(ix1)} ${f(iy1)} Z`;
+
+    const detents = [];
+    if (mode === 'detents') {
+      for (let a = min; a <= max + 0.001; a += detentStep) {
+        const [x1, y1] = P(37.5, a), [x2, y2] = P(44, a);
+        detents.push({ x1: f(x1), y1: f(y1), x2: f(x2), y2: f(y2) });
+      }
+    }
+    const stops = [];
+    if (mode === 'bounded' || mode === 'detents') {
+      [min, max].forEach((a) => {
+        const [x1, y1] = P(37, a), [x2, y2] = P(49, a);
+        stops.push({ x1: f(x1), y1: f(y1), x2: f(x2), y2: f(y2) });
+      });
+    }
+    const arcAt = (from, to) => {
+      const span = to - from;
+      const [x1, y1] = P(38.5, from), [x2, y2] = P(38.5, to);
+      return `M${f(x1)} ${f(y1)} A38.5 38.5 0 ${Math.abs(span) > 180 ? 1 : 0} ${span < 0 ? 0 : 1} ${f(x2)} ${f(y2)}`;
+    };
+
+    const ink = disabled ? '#8b8b93' : '#2b2e5c';
+    return {
+      px, ticks, crescent, detents, stops,
+      faceId: this.uid + 'f', cresId: this.uid + 'c',
+      rot: `rotate(${angle} 50 50)`,
+      hasDetents: mode === 'detents',
+      hasStops: mode === 'bounded' || mode === 'detents',
+      hasArc: mode === 'arc',
+      trackPath: arcAt(min, max),
+      arcPath: arcAt(min, Math.max(min, Math.min(max, angle))),
+      trackColor: disabled ? '#dcdce1' : '#d8d9e8',
+      arcColor: disabled ? '#a8a8b2' : '#5b62b8',
+      ringColor: focus ? '#5b62b8' : ink,
+      tickColor: disabled ? '#b6b6bd' : '#3a3d6b',
+      detentColor: disabled ? '#b0b0b8' : '#6f74bd',
+      stopColor: disabled ? '#8e8e98' : '#c2543f',
+      faceFrom: disabled ? '#f4f4f4' : '#fcfbf6',
+      faceTo: disabled ? '#e6e6e9' : '#e7e7f1',
+      cresFrom: disabled ? '#c8c8cf' : active ? '#9aa0e0' : '#8f96d4',
+      cresMid: disabled ? '#a9a9b3' : active ? '#5b62b8' : '#5157a8',
+      cresTo: disabled ? '#8e8e98' : '#282b60',
+      pointerX: f(P(25.5, angle)[0]), pointerY: f(P(25.5, angle)[1]), pointerR: 4,
+      pointerColor: disabled ? '#eeeef0' : '#fdfdf9',
+      capFill: disabled ? '#f2f2f4' : '#fdfdf9',
+      alpha: disabled ? 0.65 : 1,
+    };
+  }
+}
+</script>
+</body>
+</html>

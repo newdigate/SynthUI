@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · keyboard · key + led + pad</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Octave of lit keys</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Two variants of one key: a tall pale body or a short black one, each carrying a red LED and a ridged pad. Black and white differ by three fills and a height — the LED cluster is placed by a single <span style="font-family:'IBM Plex Mono',monospace">zoneTop</span> fraction, so the pads line up across both rows without hand-tuning.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">2 variants · 1 geometry</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">pad = 2 rects + 4 ridges</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">LED bloom = stroke pass</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#2a2a2c;padding:34px 36px;display:flex;flex-direction:column;gap:26px">
+      <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+        <dc-import name="PanelButton" glyph="play" accent="green" on="{{ playing }}" w="{{ 66 }}" h="{{ 52 }}" onPress="{{ onPlay }}" hint-size="66px,52px"></dc-import>
+        <dc-import name="PanelButton" glyph="stop" accent="amber" on="{{ stopped }}" w="{{ 66 }}" h="{{ 52 }}" onPress="{{ onStop }}" hint-size="66px,52px"></dc-import>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#8e8b84">note</span>
+          <dc-import name="SevenSegment" text="{{ noteText }}" size="{{ 40 }}" accent="red" hint-size="140px,44px"></dc-import>
+        </div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <dc-import name="SlideToggle" value="{{ hold }}" positions="{{ 2 }}" left="none" right="none" w="{{ 96 }}" h="{{ 38 }}" panel="#2a2a2c" onPress="{{ toggleHold }}" hint-size="96px,38px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#8e8b84">hold</span>
+        </div>
+      </div>
+      <div style="position:relative;height:158px;width:100%">
+        <div style="display:flex;gap:2px;position:absolute;left:0;top:0">
+          <sc-for list="{{ whites }}" as="k" hint-placeholder-count="14">
+            <dc-import name="PianoKey" type="white" lit="{{ k.lit }}" pressed="{{ k.pressed }}" zoneTop="{{ 0.5 }}" padHeight="{{ 46 }}" w="{{ 46 }}" h="{{ 158 }}" onPress="{{ k.toggle }}" hint-size="56px,222px"></dc-import>
+          </sc-for>
+        </div>
+        <sc-for list="{{ blacks }}" as="k" hint-placeholder-count="10">
+          <div style="position:absolute;top:0;left:{{ k.left }}px">
+            <dc-import name="PianoKey" type="black" lit="{{ k.lit }}" pressed="{{ k.pressed }}" zoneTop="{{ 0.1 }}" padHeight="{{ 46 }}" w="{{ 30 }}" h="{{ 76 }}" onPress="{{ k.toggle }}" hint-size="36px,132px"></dc-import>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">click any key to arm its LED · play walks the armed notes · hold latches the last note</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · Variants &amp; states</h2>
+      <span style="font-size:14px;color:#6f7396">Press moves the LED cluster down 1.2% of the key height. Nothing resizes.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="background:#2a2a2c;padding:22px;display:flex;justify-content:center">
+            <dc-import name="PianoKey" type="{{ s.type }}" lit="{{ s.lit }}" pressed="{{ s.pressed }}" zoneTop="{{ s.zone }}" padHeight="{{ 46 }}" w="{{ 58 }}" h="{{ s.h }}" hint-size="58px,200px"></dc-import>
+          </div>
+          <div style="padding:15px 17px 17px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Octave geometry</h2>
+      <span style="font-size:14px;color:#6f7396">Black keys sit at 0.62 of a white width, offset by the C–D–E / F–G–A–B pattern.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:44px;align-items:start">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ geom }}" as="r" hint-placeholder-count="6">
+          <div style="padding:10px 12px 10px 0;border-bottom:1px solid #e4e2d7;font-weight:500">{{ r.a }}</div>
+          <div style="padding:10px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+        </sc-for>
+      </div>
+      <div style="background:#2a2a2c;border-radius:5px;padding:26px;display:flex;justify-content:center">
+        <div style="position:relative;height:123px;width:280px">
+          <div style="display:flex;gap:2px;position:absolute;left:0;top:0">
+            <sc-for list="{{ miniWhites }}" as="k" hint-placeholder-count="7">
+              <dc-import name="PianoKey" type="white" lit="{{ k.lit }}" zoneTop="{{ 0.5 }}" padHeight="{{ 34 }}" w="{{ 38 }}" h="{{ 123 }}" hint-size="38px,150px"></dc-import>
+            </sc-for>
+          </div>
+          <sc-for list="{{ miniBlacks }}" as="k" hint-placeholder-count="5">
+            <div style="position:absolute;top:0;left:{{ k.left }}px">
+              <dc-import name="PianoKey" type="black" lit="{{ k.lit }}" zoneTop="{{ 0.1 }}" padHeight="{{ 34 }}" w="{{ 24 }}" h="{{ 58 }}" hint-size="24px,90px"></dc-import>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Draw list, per key</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="6">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b;max-width:62ch">Two octaves is 24 keys × 9 primitives — 216 draws, all flat fills and one gradient pair shared by every key. Only the LED fill and the pad offset change with state, so a keypress dirties a 62-unit square.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Replaces</h2>
+      </div>
+      <img src="crop-keys.png" alt="original keyboard strip" style="width:100%;image-rendering:pixelated;border-radius:4px"></img>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+        <div>photographed keybed · 706×218</div>
+        <div>2 key arts · LEDs baked per state</div>
+        <div style="color:#22243c;font-weight:500;margin-top:10px">vector · 1 key · 2 variants</div>
+        <div style="color:#22243c;font-weight:500">any octave count · any key width</div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: the warm-white key face darkening to its right edge, the black key's hard shadow gutter, the ridged pad with its own cast shadow, and the LED sitting directly above it. Dropped: the fixed seven-white-key strip — the octave is a layout, not a bitmap, so an 88-key bed is the same nine paths.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200}}">
+const NOTES = ['C', 'd', 'd', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'b', 'b'];
+const WHITE_IDX = [0, 2, 4, 5, 7, 9, 11];
+const BLACK_IN_OCT = [1, 3, 6, 8, 10];
+
+class Component extends DCLogic {
+  state = { armed: {}, playing: false, step: 0, hold: 0 };
+  componentDidMount() {
+    this.t = setInterval(() => { if (this.state.playing) this.setState((s) => ({ step: s.step + 1 })); }, 210);
+  }
+  componentWillUnmount() { clearInterval(this.t); }
+
+  keys(octaves, whiteW, gap, blackW) {
+    const whites = [], blacks = [];
+    for (let o = 0; o < octaves; o++) {
+      WHITE_IDX.forEach((n, wi) => whites.push({ midi: o * 12 + n, index: o * 7 + wi }));
+      BLACK_IN_OCT.forEach((n) => {
+        const before = WHITE_IDX.filter((x) => x < n).length;
+        const left = (o * 7 + before) * (whiteW + gap) - blackW / 2 - gap / 2;
+        blacks.push({ midi: o * 12 + n, left: Math.round(left) });
+      });
+    }
+    return { whites, blacks };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const armedList = Object.keys(s.armed).filter((k) => s.armed[k]).map(Number).sort((a, b) => a - b);
+    const cur = s.playing && armedList.length ? armedList[s.step % armedList.length] : (s.hold ? armedList[armedList.length - 1] : -1);
+    const deco = (m) => ({
+      lit: !!s.armed[m] || m === cur,
+      pressed: m === cur,
+      toggle: () => this.setState((p) => ({ armed: { ...p.armed, [m]: !p.armed[m] } })),
+    });
+
+    const main = this.keys(2, 46, 2, 30);
+    const mini = this.keys(1, 38, 2, 24);
+    const noteName = cur >= 0 ? NOTES[cur % 12] + String(Math.floor(cur / 12) + 3) : ' - ';
+
+    return {
+      playing: s.playing, stopped: !s.playing, hold: s.hold,
+      noteText: noteName,
+      onPlay: () => this.setState({ playing: true }),
+      onStop: () => this.setState({ playing: false, step: 0 }),
+      toggleHold: () => this.setState((p) => ({ hold: p.hold ? 0 : 1 })),
+      whites: main.whites.map((k) => ({ ...deco(k.midi) })),
+      blacks: main.blacks.map((k) => ({ left: k.left, ...deco(k.midi) })),
+      miniWhites: mini.whites.map((k) => ({ lit: [0, 4, 7].includes(k.midi) })),
+      miniBlacks: mini.blacks.map((k) => ({ left: k.left, lit: k.midi === 3 })),
+      states: [
+        { name: 'white · idle', type: 'white', lit: false, pressed: false, zone: 0.58, h: 200, note: 'LED dark but still glassy; pad reads as a separate moulded part.' },
+        { name: 'white · armed', type: 'white', lit: true, pressed: false, zone: 0.58, h: 200, note: 'LED takes its hot fill plus a halo 1.5× its radius at 34% α.' },
+        { name: 'white · held', type: 'white', lit: true, pressed: true, zone: 0.58, h: 200, note: 'Body darkens a step and the LED-plus-pad cluster drops 1.2%.' },
+        { name: 'black · idle', type: 'black', lit: false, pressed: false, zone: 0.1, h: 128, note: 'Same paths, three darker fills, cluster moved to the top of the key.' },
+        { name: 'black · armed', type: 'black', lit: true, pressed: false, zone: 0.1, h: 128, note: 'The red reads hotter against black — no separate colour needed.' },
+        { name: 'black · held', type: 'black', lit: true, pressed: true, zone: 0.1, h: 128, note: 'Identical press treatment, so both rows feel like one keybed.' },
+      ],
+      geom: [
+        { a: 'white key', b: '46 × 158, gap 2' },
+        { a: 'black key', b: '30 × 76 — ends above the white LEDs' },
+        { a: 'black offset', b: 'boundary − blackW/2 − gap/2' },
+        { a: 'per octave', b: '7 white, 5 black at 1,3,6,8,10' },
+        { a: 'zoneTop', b: '0.50 white · 0.10 black' },
+        { a: 'pad', b: '62 wide in cell, 46 px tall on both rows' },
+      ],
+      drawList: [
+        { a: 'body', b: 'rounded rect + horizontal grad', c: 'press' },
+        { a: 'right shade', b: 'rect, 7% / 25% α', c: 'static' },
+        { a: 'led', b: 'circle r≈0.032h + 4', c: 'value' },
+        { a: 'led bloom', b: 'stroke w1.5r at 34% α', c: 'lit only' },
+        { a: 'pad shadow', b: 'rect r2.5, 35% α', c: 'press' },
+        { a: 'pad', b: 'rect r2.5 + grad + stroke', c: 'press' },
+        { a: 'ridges', b: '4 × line, w0.035 × padH', c: 'press' },
+      ],
+      snippet:
+        'for (i = 0; i < n_white; i++)\n' +
+        '  draw_key(rt, WHITE, x + i*(kw+gap),\n' +
+        '           armed[white_midi[i]]);\n\n' +
+        'for (i = 0; i < n_black; i++)\n' +
+        '  draw_key(rt, BLACK, black_x[i],\n' +
+        '           armed[black_midi[i]]);\n\n' +
+        '/* black_x[i] = bound - bw/2 - gap/2\n' +
+        '   computed once at layout time */',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · slide toggle · waveform selector</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Ridged slide switch</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">A black well cut into the faceplate with a ridged handle in it, flanked by engraved waveform marks. The handle is one rect group translated by <span style="font-family:'IBM Plex Mono',monospace">position × knobW</span> — two, three or four stops from the same geometry, no extra art.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">2–4 positions</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">handle = 3 rects + 4 lines</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">glyphs are stroked paths</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#c3c6c5;padding:38px 40px;display:flex;gap:48px;align-items:flex-start;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:26px">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#4a4d4d">waveform</span>
+          <dc-import name="SlideToggle" value="{{ wave }}" positions="{{ 2 }}" left="saw" right="square" w="{{ 190 }}" h="{{ 64 }}" panel="#c3c6c5" onPress="{{ toggleWave }}" hint-size="190px,64px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#4a4d4d">lfo shape · 4 stops</span>
+          <dc-import name="SlideToggle" value="{{ lfo }}" positions="{{ 4 }}" left="tri" right="pulse" w="{{ 190 }}" h="{{ 64 }}" panel="#c3c6c5" onPress="{{ cycleLfo }}" hint-size="190px,64px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#4a4d4d">accent · no glyphs</span>
+          <dc-import name="SlideToggle" value="{{ accent }}" positions="{{ 2 }}" left="none" right="none" w="{{ 130 }}" h="{{ 54 }}" panel="#c3c6c5" onPress="{{ toggleAccent }}" hint-size="130px,54px"></dc-import>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;align-items:flex-start;background:#39434b;padding:24px 26px;border-radius:5px">
+        <dc-import name="SevenSegment" text="{{ readout }}" size="{{ 46 }}" accent="{{ readAccent }}" hint-size="200px,50px"></dc-import>
+        <div style="display:flex;gap:20px;align-items:center">
+          <dc-import name="Knob" size="{{ 66 }}" angle="{{ cutoff }}" mode="arc" hint-size="66px,66px"></dc-import>
+          <dc-import name="LevelMeter" value="{{ level }}" peak="{{ -1 }}" segments="{{ 10 }}" w="{{ 26 }}" h="{{ 120 }}" panel="#39434b" hint-size="26px,120px"></dc-import>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#aab6bd;line-height:1.7;max-width:24ch">the switches drive the readout · accent widens the arc</div>
+      </div>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">click a switch · a 4-stop switch advances and wraps</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · Positions &amp; states</h2>
+      <span style="font-size:14px;color:#6f7396">Handle width is the well divided by stop count — the travel always fills the well.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="background:#c3c6c5;padding:26px 20px;display:flex;justify-content:center">
+            <dc-import name="SlideToggle" value="{{ s.value }}" positions="{{ s.positions }}" left="{{ s.left }}" right="{{ s.right }}" disabled="{{ s.disabled }}" w="{{ 180 }}" h="{{ 60 }}" panel="#c3c6c5" hint-size="180px,60px"></dc-import>
+          </div>
+          <div style="padding:15px 17px 17px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Sizes &amp; plates</h2>
+      <span style="font-size:14px;color:#6f7396">The ridge count is fixed; ridge weight rides the handle width.</span>
+    </div>
+    <div style="background:#4d5862;border-radius:5px;padding:34px 36px;display:flex;gap:36px;align-items:center;flex-wrap:wrap">
+      <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="SlideToggle" value="{{ 1 }}" positions="{{ 2 }}" left="saw" right="square" w="{{ z.w }}" h="{{ z.h }}" panel="{{ z.panel }}" hint-size="140px,48px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#c7d0d5">{{ z.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Draw list</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="7">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Replaces</h2>
+      </div>
+      <img src="crop-toggle.png" alt="original waveform slide switch" style="width:100%;image-rendering:pixelated;border-radius:4px"></img>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+        <div>photographed switch · 236×88 · 2 states</div>
+        <div>glyphs printed on the plate</div>
+        <div style="color:#22243c;font-weight:500;margin-top:10px">vector · 1 handle · 2–4 stops</div>
+        <div style="color:#22243c;font-weight:500">glyphs as props · any plate colour</div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: the handle sitting proud of a black well, its four ridges, the hard shadow cast down-right, and the engraved marks either side. Dropped: the printed plate — the glyph pair is a prop, so the same switch does saw/square here and tri/pulse next to it.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;positions&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:2,&quot;max&quot;:4,&quot;tsType&quot;:&quot;number&quot;}}">
+const LFO = ['tri', 'saw', 'squ', 'pul'];
+
+class Component extends DCLogic {
+  state = { wave: 1, lfo: 0, accent: 0 };
+  renderVals() {
+    const s = this.state;
+    return {
+      wave: s.wave, lfo: s.lfo, accent: s.accent,
+      toggleWave: () => this.setState((p) => ({ wave: p.wave ? 0 : 1 })),
+      cycleLfo: () => this.setState((p) => ({ lfo: (p.lfo + 1) % 4 })),
+      toggleAccent: () => this.setState((p) => ({ accent: p.accent ? 0 : 1 })),
+      readout: (s.wave ? 'Squ' : 'SAu') + '.' + String(s.lfo + 1),
+      readAccent: s.accent ? 'amber' : 'cyan',
+      cutoff: -140 + (s.wave * 0.45 + s.lfo * 0.14 + s.accent * 0.2) * 280,
+      level: 0.35 + s.accent * 0.3 + s.lfo * 0.06,
+      states: [
+        { name: 'position 0', value: 0, positions: 2, left: 'saw', right: 'square', disabled: false, note: 'Handle at the left stop. The empty half of the well stays visibly recessed.' },
+        { name: 'position 1', value: 1, positions: 2, left: 'saw', right: 'square', disabled: false, note: 'Same geometry translated by one handle width — nothing is redrawn.' },
+        { name: 'three stops', value: 1, positions: 3, left: 'tri', right: 'pulse', disabled: false, note: 'Handle narrows to a third of the well; the shadow and ridges scale with it.' },
+        { name: 'four stops', value: 2, positions: 4, left: 'tri', right: 'pulse', disabled: false, note: 'Four LFO shapes in the width of the two-stop switch.' },
+        { name: 'no glyphs', value: 1, positions: 2, left: 'none', right: 'none', disabled: false, note: 'Plate marks are optional; the well then takes the full width.' },
+        { name: 'disabled', value: 0, positions: 2, left: 'saw', right: 'square', disabled: true, note: 'Handle lifts to a lighter grey, ridges and marks lose contrast. No motion.' },
+      ],
+      sizes: [
+        { w: 96, h: 34, panel: '#b9bcbc', label: '96 · silver' },
+        { w: 140, h: 48, panel: '#6d7a85', label: '140 · blue-grey' },
+        { w: 190, h: 64, panel: '#d6d4cf', label: '190 · ivory' },
+        { w: 250, h: 84, panel: '#39434b', label: '250 · dark' },
+      ],
+      drawList: [
+        { a: 'plate', b: 'rect, flat fill', c: 'static' },
+        { a: 'glyph pair', b: '2 × stroked path, w2.2', c: 'static' },
+        { a: 'housing', b: 'rounded rect r1.6, #0f0f10', c: 'static' },
+        { a: 'well', b: 'rect, #1d1d1f', c: 'static' },
+        { a: 'handle shadow', b: 'rect r1.2, 45% α, +1.5/+2', c: 'translate' },
+        { a: 'handle', b: 'rect r1.2 + stroke + top gloss', c: 'translate' },
+        { a: 'ridges', b: '4 × line, w0.055 × knobW', c: 'translate' },
+      ],
+      snippet:
+        'int pos = clampi(value, 0, stops - 1);\n' +
+        'float kw = wellW / (float)stops;\n\n' +
+        '/* plate, glyphs, housing, well:\n' +
+        '   uploaded once, identity matrix */\n\n' +
+        'vg_lite_identity(&m);\n' +
+        'vg_lite_translate(wellX + pos * kw,\n' +
+        '                  wellY, &m);\n' +
+        'draw_handle(rt, &handle, &m,\n' +
+        '    dis ? KNOB_DIM : KNOB);',
+    };
+  }
+}
+</script>
+</body>
+</html>

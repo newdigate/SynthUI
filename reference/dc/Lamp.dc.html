@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" width="{{ w }}" height="{{ h }}" onClick="{{ onPress }}" style="display:block">
+  <rect x="0" y="0" width="{{ vw }}" height="{{ vh }}" rx="1.5" fill="#303048"></rect>
+  <rect x="1.6" y="1.6" width="{{ innerW }}" height="{{ innerH }}" fill="#181830"></rect>
+  <sc-if value="{{ isRound }}" hint-placeholder-val="{{ true }}">
+    <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r }}" fill="{{ fill }}" fill-opacity="{{ fillA }}" stroke="{{ glow }}" stroke-width="{{ glowW }}" stroke-opacity="{{ glowA }}"></circle>
+  </sc-if>
+  <sc-if value="{{ isBar }}" hint-placeholder-val="{{ false }}">
+    <rect x="{{ bx }}" y="{{ by }}" width="{{ bw }}" height="{{ bh }}" rx="{{ br }}" fill="{{ fill }}" fill-opacity="{{ fillA }}" stroke="{{ glow }}" stroke-width="{{ glowW }}" stroke-opacity="{{ glowA }}"></rect>
+  </sc-if>
+  <rect x="1.6" y="1.6" width="{{ innerW }}" height="{{ topLine }}" fill="#7890d8" opacity="0.35"></rect>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:120,&quot;height&quot;:120},&quot;shape&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;round&quot;,&quot;options&quot;:[&quot;round&quot;,&quot;bar&quot;,&quot;pill&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;color&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#f078b0&quot;,&quot;options&quot;:[&quot;#f078b0&quot;,&quot;#e04848&quot;,&quot;#48e070&quot;,&quot;#f0a030&quot;,&quot;#90a8f0&quot;,&quot;#d8f0f0&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;on&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:48,&quot;min&quot;:8,&quot;max&quot;:200,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:48,&quot;min&quot;:8,&quot;max&quot;:200,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;onPress&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const w = Number(this.props.w ?? 48);
+    const h = Number(this.props.h ?? 48);
+    const vw = 100, vh = Math.round((100 * h) / w);
+    const on = this.props.on !== false;
+    const shape = this.props.shape ?? 'round';
+    const color = this.props.color ?? '#f078b0';
+    const m = 12;
+    return {
+      w, h, vw, vh, viewBox: `0 0 ${vw} ${vh}`,
+      innerW: vw - 3.2, innerH: vh - 3.2, topLine: Math.max(1.2, vh * 0.06),
+      isRound: shape === 'round', isBar: shape !== 'round',
+      cx: vw / 2, cy: vh / 2, r: Math.min(vw, vh) / 2 - m,
+      bx: m, by: vh * 0.26, bw: vw - m * 2, bh: vh * 0.48, br: shape === 'pill' ? vh * 0.24 : 2,
+      fill: color, glow: color, fillA: on ? 1 : 0.3,
+      glowW: on ? Math.min(vw, vh) * 0.22 : 0,
+      glowA: on ? 0.3 : 0,
+      onPress: this.props.onPress,
+    };
+  }
+}
+</script>
+</body>
+</html>
