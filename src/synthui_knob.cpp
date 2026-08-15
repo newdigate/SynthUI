@@ -8,6 +8,10 @@
  * section 5): one native vertical gradient on the face; the crescent's SVG
  * gradient is replaced by angle-driven luminance (section 5.3). */
 #include "synthui_knob.h"
+/* Out-of-tree widget: the class struct literal and the by-value lv_obj_t in
+ * synthui_knob_t both need the COMPLETE private types.  LVGL 9's sanctioned
+ * umbrella for that is lvgl_private.h (LV_USE_PRIVATE_API stays 0). */
+#include <lvgl_private.h>
 #include <math.h>
 
 #define KNOB_DEG (3.14159265358979f / 180.0f)
