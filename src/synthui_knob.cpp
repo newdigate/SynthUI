@@ -228,10 +228,12 @@ static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
         float v = k->angle;
         if (v < k->min_deg) v = k->min_deg;
         if (v > k->max_deg) v = k->max_deg;
-        draw_arc_seg(layer, cx, cy, S, 38.5f, 3.2f, k->min_deg, k->max_deg,
+        /* LVGL arc radius = OUTER edge; SVG stroke is centered on 38.5, so
+         * outer = 38.5 + 3.2/2 = 40.1 (width stays 3.2). */
+        draw_arc_seg(layer, cx, cy, S, 40.1f, 3.2f, k->min_deg, k->max_deg,
                      pal.track, g);
         if (v > k->min_deg)
-            draw_arc_seg(layer, cx, cy, S, 38.5f, 3.2f, k->min_deg, v,
+            draw_arc_seg(layer, cx, cy, S, 40.1f, 3.2f, k->min_deg, v,
                          pal.arc, g);
     }
 
@@ -254,10 +256,12 @@ static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
 
     /* crescent: annulus r=21..30 spanning sweep centred on angle; solid color,
      * angle-driven luminance (spec 5.3) -- lightest pointing at the top-left
-     * light (-45 deg), darkest opposite */
+     * light (-45 deg), darkest opposite.  lv_color_mix(c1,c2,mix) returns c1
+     * at mix=255 -- the trap that inverted the original formula; cres_from
+     * (the light color) must be first. */
     {
         const float t = (1.0f - cosf((k->angle + 45.0f) * KNOB_DEG)) * 0.5f;
-        const lv_color_t c = lv_color_mix(pal.cres_to, pal.cres_from,
+        const lv_color_t c = lv_color_mix(pal.cres_from, pal.cres_to,
                                           (uint8_t)lroundf(255.0f * (1.0f - t)));
         draw_arc_seg(layer, cx, cy, S, 30.0f, 9.0f,
                      k->angle - k->sweep * 0.5f, k->angle + k->sweep * 0.5f,
