@@ -21,6 +21,11 @@ extern const lv_obj_class_t synthui_knob_class;
 
 lv_obj_t *synthui_knob_create(lv_obj_t *parent);
 
+/* State changes (lv_obj_add_state()/remove_state()) only trigger LVGL's
+ * automatic repaint when a style differs between the old and new state.
+ * This widget defines no local styles, so that check always finds SAME and
+ * the repaint never fires. After changing states programmatically, call
+ * lv_obj_invalidate(obj). */
 void  synthui_knob_set_angle(lv_obj_t *obj, float deg);        /* default 0 */
 void  synthui_knob_set_mode(lv_obj_t *obj, synthui_knob_mode_t m);
 void  synthui_knob_set_sweep(lv_obj_t *obj, float deg);        /* default 215, clamped 30..340 */

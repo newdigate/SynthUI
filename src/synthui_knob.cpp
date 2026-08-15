@@ -15,6 +15,7 @@
 #include <math.h>
 
 #define KNOB_DEG (3.14159265358979f / 180.0f)
+#define MY_CLASS (&synthui_knob_class)
 
 typedef struct {
     lv_obj_t obj;
@@ -30,6 +31,10 @@ const lv_obj_class_t synthui_knob_class = {
     .base_class     = &lv_obj_class,
     .constructor_cb = knob_constructor,
     .event_cb       = knob_event,
+    /* upstream's class-literal template lists .name last; C++ requires
+     * designators in declaration order, and name declares before width_def
+     * (lv_obj_class_private.h), so it has to go here instead. */
+    .name           = "synthui_knob",
     .width_def      = 120,
     .height_def     = 120,
     .instance_size  = sizeof(synthui_knob_t),
@@ -50,36 +55,64 @@ static void knob_constructor(const lv_obj_class_t *cls, lv_obj_t *obj)
     k->min_deg = -140.0f; k->max_deg = 140.0f;
     k->detent_step = 35.0f; k->tick_count = 8;
     k->mode = SYNTHUI_KNOB_MODE_ENDLESS;
-    lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(obj, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
 }
 
-#define KNOB_SETTER(field, expr) do { \
+#define KNOB_SETTER(obj, field, val) do { \
     synthui_knob_t *k = (synthui_knob_t *)obj; \
-    k->field = (expr); \
+    if (k->field == (val)) return; \
+    k->field = (val); \
     lv_obj_invalidate(obj); } while (0)
 
-void synthui_knob_set_angle(lv_obj_t *obj, float deg) { KNOB_SETTER(angle, deg); }
-void synthui_knob_set_mode(lv_obj_t *obj, synthui_knob_mode_t m) { KNOB_SETTER(mode, m); }
-void synthui_knob_set_sweep(lv_obj_t *obj, float deg)
-{   /* renderVals(): Math.max(30, Math.min(340, sweep)) */
-    KNOB_SETTER(sweep, deg < 30.0f ? 30.0f : (deg > 340.0f ? 340.0f : deg));
+void synthui_knob_set_angle(lv_obj_t *obj, float deg)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    KNOB_SETTER(obj, angle, deg);
 }
-void synthui_knob_set_tick_count(lv_obj_t *obj, uint8_t n) { KNOB_SETTER(tick_count, n > 24 ? 24 : n); }
-void synthui_knob_set_detent_step(lv_obj_t *obj, float deg) { KNOB_SETTER(detent_step, deg); }
+void synthui_knob_set_mode(lv_obj_t *obj, synthui_knob_mode_t m)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    KNOB_SETTER(obj, mode, m);
+}
+void synthui_knob_set_sweep(lv_obj_t *obj, float deg)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    /* renderVals(): Math.max(30, Math.min(340, sweep)) */
+    KNOB_SETTER(obj, sweep, deg < 30.0f ? 30.0f : (deg > 340.0f ? 340.0f : deg));
+}
+void synthui_knob_set_tick_count(lv_obj_t *obj, uint8_t n)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    KNOB_SETTER(obj, tick_count, n > 24 ? 24 : n);
+}
+void synthui_knob_set_detent_step(lv_obj_t *obj, float deg)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    /* Floor at 1 deg: prevents pathological draw-loop counts (Task 5
+     * iterates min..max by this step). */
+    KNOB_SETTER(obj, detent_step, deg < 1.0f ? 1.0f : deg);
+}
 void synthui_knob_set_range(lv_obj_t *obj, float min_deg, float max_deg)
 {
+    LV_ASSERT_OBJ(obj, MY_CLASS);
     synthui_knob_t *k = (synthui_knob_t *)obj;
+    if (k->min_deg == min_deg && k->max_deg == max_deg) return;
     k->min_deg = min_deg; k->max_deg = max_deg;
     lv_obj_invalidate(obj);
 }
-float synthui_knob_get_angle(const lv_obj_t *obj) { return ((const synthui_knob_t *)obj)->angle; }
+float synthui_knob_get_angle(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_knob_t *)obj)->angle;
+}
 
 static void knob_draw(synthui_knob_t *k, lv_layer_t *layer); /* Task 5 */
 
 static void knob_event(const lv_obj_class_t *cls, lv_event_t *e)
 {
     LV_UNUSED(cls);
-    if (lv_obj_event_base(&synthui_knob_class, e) != LV_RESULT_OK) return;
+    if (lv_obj_event_base(MY_CLASS, e) != LV_RESULT_OK) return;
+    /* Touch handling lands later; must invalidate on LV_EVENT_PRESSED/RELEASED/PRESS_LOST/FOCUSED/DEFOCUSED then. */
     if (lv_event_get_code(e) == LV_EVENT_DRAW_MAIN)
         knob_draw((synthui_knob_t *)lv_event_get_current_target_obj(e),
                   lv_event_get_layer(e));
