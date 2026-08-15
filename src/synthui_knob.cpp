@@ -151,8 +151,8 @@ static void knob_palette(lv_state_t st, knob_palette_t *p)
 static void polar(float cx, float cy, float S, float r, float deg,
                   lv_point_precise_t *out)
 {
-    out->x = (lv_value_precise_t)(cx + r * S * sinf(deg * KNOB_DEG));
-    out->y = (lv_value_precise_t)(cy - r * S * cosf(deg * KNOB_DEG));
+    out->x = (lv_value_precise_t)lroundf(cx + r * S * sinf(deg * KNOB_DEG));
+    out->y = (lv_value_precise_t)lroundf(cy - r * S * cosf(deg * KNOB_DEG));
 }
 
 static void draw_ray(lv_layer_t *layer, float cx, float cy, float S,
@@ -176,8 +176,19 @@ static void draw_arc_seg(lv_layer_t *layer, float cx, float cy, float S,
     a.center.x = (int32_t)lroundf(cx); a.center.y = (int32_t)lroundf(cy);
     a.radius = (uint16_t)lroundf(r * S);
     a.width  = (int32_t)lroundf(w * S); if (a.width < 1) a.width = 1;
-    a.start_angle = (lv_value_precise_t)(a1 - 90.0f);
-    a.end_angle   = (lv_value_precise_t)(a2 - 90.0f);
+    /* LVGL's sw arc normalizes angles only DOWNWARD (lv_draw_sw_arc.c: `while
+     * (a >= 360) a -= 360;`) and then lv_draw_sw_mask_angle_init() CLAMPS a
+     * negative angle to 0.  A negative start therefore renders a truncated
+     * wedge, and when BOTH ends clamp to 0 the mask degenerates into a full
+     * ring.  Fold the start into [0,360) and carry the span -- the same
+     * normalization lv_arc does before its angles reach the renderer. */
+    float span = a2 - a1;
+    if (span <= 0.0f) return;              /* empty or inverted: draw nothing */
+    if (span > 360.0f) span = 360.0f;      /* >= 360 hits LVGL's full-ring path */
+    float s0 = fmodf(a1 - 90.0f, 360.0f);
+    if (s0 < 0.0f) s0 += 360.0f;
+    a.start_angle = (lv_value_precise_t)s0;
+    a.end_angle   = (lv_value_precise_t)(s0 + span);
     a.color = color; a.opa = opa;
     lv_draw_arc(layer, &a);
 }
@@ -187,7 +198,7 @@ static void draw_disc(lv_layer_t *layer, float x, float y, float rpx,
 {
     lv_area_t a = { (int32_t)lroundf(x - rpx), (int32_t)lroundf(y - rpx),
                     (int32_t)lroundf(x + rpx), (int32_t)lroundf(y + rpx) };
-    lv_draw_rect(layer, (lv_draw_rect_dsc_t *)dsc, &a);
+    lv_draw_rect(layer, dsc, &a);
 }
 
 static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
@@ -204,7 +215,9 @@ static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
     const uint8_t g = pal.gopa;
 
     /* tick ring -- fixed, never rotates; decorated modes keep only the top
-     * orientation marker (renderVals' effTicks) */
+     * orientation marker (renderVals' effTicks).  In ENDLESS mode nticks is
+     * tick_count directly, so tick_count=0 deliberately drops the top marker
+     * too; the other modes force nticks=1 and always keep it. */
     const uint8_t nticks =
         (k->mode == SYNTHUI_KNOB_MODE_ENDLESS) ? k->tick_count : 1;
     for (uint8_t i = 0; i < nticks; i++) {
@@ -214,9 +227,18 @@ static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
                  pal.tick, major ? 3.4f : 2.4f, g);
     }
 
-    if (k->mode == SYNTHUI_KNOB_MODE_DETENTS && k->detent_step > 0.0f)
-        for (float a = k->min_deg; a <= k->max_deg + 0.001f; a += k->detent_step)
-            draw_ray(layer, cx, cy, S, 37.5f, 44.0f, a, pal.detent, 2.0f, g);
+    if (k->mode == SYNTHUI_KNOB_MODE_DETENTS && k->detent_step > 0.0f) {
+        /* Bounded integer form: a float accumulator could fail to terminate
+         * once detent_step drops below the ULP of a running total at extreme
+         * ranges.  The cap also bounds the draw-task count for a pathological
+         * range/step combination. */
+        int n = (int)((k->max_deg - k->min_deg) / k->detent_step);
+        if (n > 720) n = 720;
+        for (int i = 0; i <= n; i++) {
+            const float a2 = k->min_deg + (float)i * k->detent_step;
+            draw_ray(layer, cx, cy, S, 37.5f, 44.0f, a2, pal.detent, 2.0f, g);
+        }
+    }
 
     if (k->mode == SYNTHUI_KNOB_MODE_BOUNDED ||
         k->mode == SYNTHUI_KNOB_MODE_DETENTS) {
@@ -280,7 +302,7 @@ static void knob_draw(synthui_knob_t *k, lv_layer_t *layer)
     {
         lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
         d.radius = LV_RADIUS_CIRCLE; d.bg_color = pal.cap;
-        d.bg_opa = (uint8_t)((140u * g) >> 8);
+        d.bg_opa = (uint8_t)((140u * g + 127u) / 255u);
         draw_disc(layer, cx, cy, 20.0f * S, &d);
     }
 }
