@@ -5,8 +5,8 @@ knobs, faders, lamps, LED buttons, level meters, piano keys, seven-segment
 displays, toggles — for the synth firmware in the rt1176-evkb tree (acid bass
 voice, transport, step sequencer).
 
-Status: reference material only. `src/` arrives with the first widget (the
-Knob pilot).
+Status: reference material plus the first widget (`src/synthui_knob`, v1:
+rendering only, no touch).
 
 ## Layout
 
