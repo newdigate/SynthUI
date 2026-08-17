@@ -25,7 +25,8 @@ lv_obj_t *synthui_knob_create(lv_obj_t *parent);
  * automatic repaint when a style differs between the old and new state.
  * This widget defines no local styles, so that check always finds SAME and
  * the repaint never fires. After changing states programmatically, call
- * lv_obj_invalidate(obj). */
+ * lv_obj_invalidate(obj). Emits nothing itself; the input layer (vertical
+ * drag, 200 px = full sweep) emits LV_EVENT_VALUE_CHANGED. */
 void  synthui_knob_set_angle(lv_obj_t *obj, float deg);        /* default 0 */
 void  synthui_knob_set_mode(lv_obj_t *obj, synthui_knob_mode_t m);
 void  synthui_knob_set_sweep(lv_obj_t *obj, float deg);        /* default 215, clamped 30..340 */

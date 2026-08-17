@@ -5,8 +5,9 @@ knobs, faders, lamps, LED buttons, level meters, piano keys, seven-segment
 displays, toggles — for the synth firmware in the rt1176-evkb tree (acid bass
 voice, transport, step sequencer).
 
-Status: reference material plus the first widget (`src/synthui_knob`, v1:
-rendering only, no touch).
+Status: reference material plus the first widget (`src/synthui_knob`):
+renders all four modes and takes vertical-drag touch input (200 px = full
+sweep; drag math is host-tested in `tests/`, run via `tests/run.sh`).
 
 ## Layout
 

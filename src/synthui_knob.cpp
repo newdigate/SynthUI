@@ -8,6 +8,7 @@
  * section 5): one native vertical gradient on the face; the crescent's SVG
  * gradient is replaced by angle-driven luminance (section 5.3). */
 #include "synthui_knob.h"
+#include "synthui_knob_math.h"
 /* Out-of-tree widget: the class struct literal and the by-value lv_obj_t in
  * synthui_knob_t both need the COMPLETE private types.  LVGL 9's sanctioned
  * umbrella for that is lvgl_private.h (LV_USE_PRIVATE_API stays 0). */
@@ -20,12 +21,16 @@
 typedef struct {
     lv_obj_t obj;
     float angle, sweep, min_deg, max_deg, detent_step;
+    float drag_pos;   /* unsnapped drag accumulator; see knob_input_pressing */
     uint8_t tick_count;
     synthui_knob_mode_t mode;
 } synthui_knob_t;
 
 static void knob_constructor(const lv_obj_class_t *cls, lv_obj_t *obj);
 static void knob_event(const lv_obj_class_t *cls, lv_event_t *e);
+static void knob_input_pressed(lv_event_t *e);
+static void knob_input_pressing(lv_event_t *e);
+static void knob_input_state(lv_event_t *e);
 
 const lv_obj_class_t synthui_knob_class = {
     .base_class     = &lv_obj_class,
@@ -55,7 +60,18 @@ static void knob_constructor(const lv_obj_class_t *cls, lv_obj_t *obj)
     k->min_deg = -140.0f; k->max_deg = 140.0f;
     k->detent_step = 35.0f; k->tick_count = 8;
     k->mode = SYNTHUI_KNOB_MODE_ENDLESS;
-    lv_obj_remove_flag(obj, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
+    k->drag_pos = 0.0f;
+    /* Not scrollable itself, and SCROLL_CHAIN_VER off: PRESSING is
+     * delivered and THEN lv_indev_scroll_handler walks the parent chain, so
+     * inside any scrollable container a vertical drag would turn the knob and
+     * scroll the panel at once. lv_slider does the same for its axis. */
+    lv_obj_remove_flag(obj, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE |
+                                            LV_OBJ_FLAG_SCROLL_CHAIN_VER));
+    lv_obj_add_event_cb(obj, knob_input_pressed,  LV_EVENT_PRESSED,    NULL);
+    lv_obj_add_event_cb(obj, knob_input_pressing, LV_EVENT_PRESSING,   NULL);
+    lv_obj_add_event_cb(obj, knob_input_state,    LV_EVENT_PRESSED,    NULL);
+    lv_obj_add_event_cb(obj, knob_input_state,    LV_EVENT_RELEASED,   NULL);
+    lv_obj_add_event_cb(obj, knob_input_state,    LV_EVENT_PRESS_LOST, NULL);
 }
 
 #define KNOB_SETTER(obj, field, val) do { \
@@ -112,10 +128,65 @@ static void knob_event(const lv_obj_class_t *cls, lv_event_t *e)
 {
     LV_UNUSED(cls);
     if (lv_obj_event_base(MY_CLASS, e) != LV_RESULT_OK) return;
-    /* Touch handling lands later; must invalidate on LV_EVENT_PRESSED/RELEASED/PRESS_LOST/FOCUSED/DEFOCUSED then. */
+    /* PRESSED/PRESSING/RELEASED/PRESS_LOST are handled by the input-layer
+     * callbacks registered in knob_constructor, not here. FOCUSED/DEFOCUSED
+     * are still unhandled -- nothing focuses this widget yet. */
     if (lv_event_get_code(e) == LV_EVENT_DRAW_MAIN)
         knob_draw((synthui_knob_t *)lv_event_get_current_target_obj(e),
                   lv_event_get_layer(e));
+}
+
+/* The accumulator is seeded HERE, not in the constructor, so a knob whose
+ * angle was set programmatically between touches (the app's step-select does
+ * exactly that) starts the next drag from where it is actually pointing. */
+static void knob_input_pressed(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    synthui_knob_t *k = (synthui_knob_t *)obj;
+    k->drag_pos = k->angle;
+}
+
+/* Vertical-drag input: LVGL's PRESSING fires per indev read (10 ms under the
+ * GT911 binding) and vect is the delta since the previous read, so the
+ * position accumulates without storing a press origin.
+ *
+ * drag_pos is UNSNAPPED and the snap is applied only to what gets displayed.
+ * Quantising the accumulator instead is a knob that cannot be turned slowly:
+ * any per-poll delta under half a detent rounds back to its own start,
+ * forever (measured: 480 px of drag = 0 deg on the pitch knob).
+ *
+ * Draws nothing itself -- synthui_knob_set_angle() owns invalidation -- so
+ * the pilot's five goldens are untouched by construction. */
+static void knob_input_pressing(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    lv_indev_t *indev = lv_event_get_indev(e);
+    if (indev == NULL) return;
+    lv_point_t vect;
+    lv_indev_get_vect(indev, &vect);
+    if (vect.y == 0) return;
+
+    synthui_knob_t *k = (synthui_knob_t *)obj;
+    k->drag_pos = synthui_knob_drag(k->drag_pos, k->min_deg, k->max_deg,
+                                    vect.y);
+    const float detent =
+        (k->mode == SYNTHUI_KNOB_MODE_DETENTS) ? k->detent_step : 0.0f;
+    const float next = synthui_knob_snap(k->drag_pos, k->min_deg, k->max_deg,
+                                         detent);
+    if (next == k->angle) return;    /* mid-detent: moved, nothing to show */
+    synthui_knob_set_angle(obj, next);
+    lv_obj_send_event(obj, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+/* REQUIRED by making the widget clickable, and predicted by knob_event's own
+ * note that touch would need it: knob_palette() recolours the crescent on
+ * LV_STATE_PRESSED, but this widget defines no local styles, so LVGL's style
+ * refresh finds SAME and never invalidates. Without this the press shows no
+ * feedback and -- worse -- the knob stays drawn in its pressed colour after
+ * release until some later angle change happens to repaint it. */
+static void knob_input_state(lv_event_t *e)
+{
+    lv_obj_invalidate(lv_event_get_current_target_obj(e));
 }
 
 typedef struct {
