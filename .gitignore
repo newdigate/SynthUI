@@ -1,2 +1,9 @@
 build/
 .DS_Store
+
+# ReBirth RB-338 material recovered from the 1997-2000 mod archive. Kept
+# locally as design reference; deliberately NOT in this repo. Its rights are
+# unclear and this repo's MIT licence cannot speak for it -- see README's
+# provenance rules. It was removed from history before the first push, so
+# adding it back is a decision, not a restoration.
+reference/rebirth/

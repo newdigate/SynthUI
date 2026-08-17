@@ -14,29 +14,35 @@ rendering only, no touch).
   (`.dc.html`), the generated `dc-runtime` `support.js`, and the sprite art
   the sheets embed. The flat layout is load-bearing: sheets reference art by
   bare relative path (one sheet uses `uploads/strip.png`).
-- `reference/rebirth/` — ReBirth RB-338 material recovered from the
-  1997–2000 mod archive (single mod `mellow.rbm`): the component guide and
-  its companion images.
+There is no `reference/rebirth/` here. ReBirth RB-338 material recovered from
+the 1997–2000 mod archive (single mod `mellow.rbm`) was part of this repo while
+it was local-only, and was **removed from history before the first push**: its
+rights are unclear, the MIT licence below cannot speak for it, and publishing it
+would have done precisely what the provenance rules in the next section exist to
+prevent. It is kept as a local design reference and `.gitignore`d, so a
+reappearing `reference/rebirth/` is a deliberate decision, not a restoration.
 
 ## Provenance rules
 
 - `reference/` is design reference. It is **never compiled**.
 - Nothing under `reference/` may be converted into C arrays, fonts, or
   sprite data in `src/` without an explicit rights decision recorded here
-  first. This bites hardest for `reference/rebirth/`: recovered community
-  mod art, rights unclear.
-- Clean-room vector rebuilds from the guide's *written descriptions* are the
-  intended path — the same firewall discipline as the rt1176-evkb tree's
-  license audit.
+  first. This bit hardest for the local ReBirth material above — recovered
+  community mod art, rights unclear — which is why it is not in this repo.
+- Clean-room vector rebuilds from *written descriptions* are the intended
+  path — the same firewall discipline as the rt1176-evkb tree's license audit.
+  `src/synthui_knob` is built that way and derives from the DC set, not from
+  the ReBirth material.
 - The MIT LICENSE covers this repo's own content: the DC component set,
-  `support.js`, and all future `src/` code. It does not speak for
-  `reference/rebirth/`.
+  `support.js`, and all `src/` code.
 
 ## Relationship to the evkb tree
 
 Sibling library under `$TEENSY_LIB_ROOT` (default `~/Development`), like
-`LVGL`, `Audio`, and `MipiDisplay`. Local-only for now: no remote, and no
-`evkb.cmake` import macro until the first consuming example.
+`LVGL`, `Audio`, and `MipiDisplay`. Imported with `import_evkb_synthui()` and
+pinned by SHA in `evkb.cmake`; resolution is local-first, so a checkout here
+wins over the pin. The consuming example is `examples/display/synthui_knob_test`,
+whose QEMU gate records one golden checksum per knob mode.
 
 Design spec: rt1176-evkb
 `docs/superpowers/specs/2026-08-15-synthui-repo-design.md`.
