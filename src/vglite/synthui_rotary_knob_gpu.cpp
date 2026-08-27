@@ -118,6 +118,76 @@ static uint32_t abgr(uint32_t hex)
            | ((hex >> 16) & 0xFFu);
 }
 
+/* ---- one-composite-per-pixel machinery ----------------------------------
+ * ★ LVGL only guarantees a damaged pixel is rendered AT LEAST once: two
+ * SURVIVING (unjoined) invalid areas may overlap -- wedge boxes of adjacent
+ * angles routinely do -- and LVGL's sw renderer paints the overlap twice,
+ * which is harmless because sw repainting is idempotent. An SRC_OVER
+ * composite of antialiased paths is NOT: the second pass re-blends the AA
+ * edge pixels over the first pass's output. Found by the equality guard on
+ * its FIRST silicon run (KNOB_DELTA_SEQ != FULL, rk_gpu_err=0) -- QEMU can
+ * never execute this path. So each area is composited MINUS everything
+ * already composited for this knob: split around the first intersecting
+ * done-rect into <=4 disjoint pieces and recurse (pieces cannot intersect
+ * done[0..i] again -- done[i]'s overlap with the area IS the removed piece,
+ * and earlier rects did not intersect the area at all). */
+/* ★ TWO MATRICES, and the split is load-bearing for the equality guard.
+ * The body/inner circles are 4-segment Bezier approximations: geometrically
+ * rotation-invariant, but the Bezier radius-error pattern ROTATES with the
+ * matrix, so a disc drawn at rotate(a) has slightly different edge AA than
+ * the same disc at rotate(b). Found on silicon by the delta equality guard:
+ * the diff between a delta-sequence render and a fresh render was exactly
+ * the two disc-edge circles, full circumference, on both knobs -- rim AA
+ * painted by an earlier composite at an earlier angle. Drawing the discs
+ * UNROTATED (rotation is a geometric no-op for them) makes their pixels a
+ * function of position and size alone, which is what the wedge-delta damage
+ * model requires. Only the wedge path takes the rotated matrix. The sw
+ * renderer has always had this property (it draws discs as axis-aligned
+ * circles and rotates only the wedge arc). */
+typedef struct {
+    const vg_lite_matrix_t *m_fixed;   /* translate * scale: discs */
+    const vg_lite_matrix_t *m_rot;     /* translate * rotate * scale: wedge */
+    const uint32_t *col;
+} rk_gpu_draw_ctx_t;
+
+static void composite_minus(const rk_gpu_draw_ctx_t *ctx, lv_area_t area,
+                            const lv_area_t *done, int ndone)
+{
+    for (int i = 0; i < ndone; i++) {
+        lv_area_t ix;
+        if (!lv_area_intersect(&ix, &area, &done[i])) continue;
+        lv_area_t piece;
+        if (area.y1 < ix.y1) {   /* strip above the overlap */
+            piece.x1 = area.x1; piece.y1 = area.y1;
+            piece.x2 = area.x2; piece.y2 = ix.y1 - 1;
+            composite_minus(ctx, piece, done + i + 1, ndone - i - 1);
+        }
+        if (ix.y2 < area.y2) {   /* strip below */
+            piece.x1 = area.x1; piece.y1 = ix.y2 + 1;
+            piece.x2 = area.x2; piece.y2 = area.y2;
+            composite_minus(ctx, piece, done + i + 1, ndone - i - 1);
+        }
+        if (area.x1 < ix.x1) {   /* left of the overlap, overlap-height */
+            piece.x1 = area.x1; piece.y1 = ix.y1;
+            piece.x2 = ix.x1 - 1; piece.y2 = ix.y2;
+            composite_minus(ctx, piece, done + i + 1, ndone - i - 1);
+        }
+        if (ix.x2 < area.x2) {   /* right of the overlap */
+            piece.x1 = ix.x2 + 1; piece.y1 = ix.y1;
+            piece.x2 = area.x2; piece.y2 = ix.y2;
+            composite_minus(ctx, piece, done + i + 1, ndone - i - 1);
+        }
+        return;                  /* the overlap itself is already composited */
+    }
+    /* lv_area x2/y2 inclusive; the driver's right/bottom exclusive. */
+    GPU_TRY(vg_lite_set_scissor(area.x1, area.y1, area.x2 + 1, area.y2 + 1));
+    for (int p = 0; p < 3; p++)
+        GPU_TRY(vg_lite_draw(&s_target, &s_paths[p], VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)(p == 2 ? ctx->m_rot
+                                                         : ctx->m_fixed),
+                             VG_LITE_BLEND_SRC_OVER, ctx->col[p]));
+}
+
 static void render_ready_cb(lv_event_t *e)
 {
     /* ★ SCISSOR TO THE DISPLAY'S ACTUAL RENDERED AREAS, per knob -- not to
@@ -149,24 +219,24 @@ static void render_ready_cb(lv_event_t *e)
         synthui_rotary_knob_palette(k, &pal);
         const uint32_t col[3] = { abgr(pal.body), abgr(pal.inner),
                                   abgr(pal.index) };
-        vg_lite_matrix_t m; vg_lite_identity(&m);
+        vg_lite_matrix_t m_fixed; vg_lite_identity(&m_fixed);
         vg_lite_translate((float)coords.x1 + W * 0.5f,
-                          (float)coords.y1 + H * 0.5f, &m);
-        vg_lite_rotate(k->angle, &m);
-        vg_lite_scale(S / RK_FIX, S / RK_FIX, &m);
+                          (float)coords.y1 + H * 0.5f, &m_fixed);
+        vg_lite_matrix_t m_rot = m_fixed;
+        vg_lite_rotate(k->angle, &m_rot);
+        vg_lite_scale(S / RK_FIX, S / RK_FIX, &m_fixed);
+        vg_lite_scale(S / RK_FIX, S / RK_FIX, &m_rot);
+        const rk_gpu_draw_ctx_t ctx = { &m_fixed, &m_rot, col };
+        lv_area_t done[LV_INV_BUF_SIZE];
+        int ndone = 0;
         for (uint32_t i = 0; i < disp->inv_p; i++) {
             if (disp->inv_area_joined[i]) continue;    /* merged, not drawn */
             lv_area_t clip;
             if (!lv_area_intersect(&clip, &disp->inv_areas[i], &coords))
                 continue;                              /* not this knob */
-            /* lv_area x2/y2 are inclusive; the driver's right/bottom are
-             * exclusive (checked against vg_lite.c's scissor clamp). */
-            GPU_TRY(vg_lite_set_scissor(clip.x1, clip.y1,
-                                        clip.x2 + 1, clip.y2 + 1));
-            for (int p = 0; p < 3; p++)
-                GPU_TRY(vg_lite_draw(&s_target, &s_paths[p],
-                                     VG_LITE_FILL_NON_ZERO, &m,
-                                     VG_LITE_BLEND_SRC_OVER, col[p]));
+            /* one composite per pixel: subtract what this knob already got */
+            composite_minus(&ctx, clip, done, ndone);
+            done[ndone++] = clip;
             drew = true;
         }
     }
