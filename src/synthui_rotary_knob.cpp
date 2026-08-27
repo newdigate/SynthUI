@@ -94,8 +94,60 @@ static void rk_destructor(const lv_obj_class_t *cls, lv_obj_t *obj)
     k->field = (val); \
     lv_obj_invalidate(obj); } while (0)
 
+/* Bbox of the +/-8 deg index wedge (ring sector r16..36) at `deg`, padded
+ * 4 px for AA. 5 samples across the 16 deg span at both radii bound the arc
+ * to <0.1 px at every supported size, and the pad is constant because AA
+ * is. NOTCH-ONLY property: the discs are rotationally invariant, so this
+ * box is the EXACT damage of an angle change (delta-damage spec section 2).
+ * A future variant whose rotor is not rotationally symmetric outside the
+ * wedge must NOT take the delta path -- the equality guard in
+ * synthui_knob_test is what catches that mistake. */
+static void wedge_bbox(const synthui_rotary_knob_t *k, float deg,
+                       lv_area_t *a)
+{
+    lv_area_t coords; lv_obj_get_coords((lv_obj_t *)&k->obj, &coords);
+    const float W = (float)lv_area_get_width(&coords);
+    const float H = (float)lv_area_get_height(&coords);
+    const float S = (W < H ? W : H) / 100.0f;
+    const float cx = (float)coords.x1 + W * 0.5f;
+    const float cy = (float)coords.y1 + H * 0.5f;
+    float minx = 1e9f, miny = 1e9f, maxx = -1e9f, maxy = -1e9f;
+    for (int i = 0; i <= 4; i++) {
+        const float d = deg - 8.0f + 4.0f * (float)i;
+        for (int r = 0; r < 2; r++) {
+            const float rad = (r ? 36.0f : 16.0f) * S;
+            const float x = cx + rad * sinf(d * RK_DEG);
+            const float y = cy - rad * cosf(d * RK_DEG);
+            if (x < minx) minx = x;
+            if (x > maxx) maxx = x;
+            if (y < miny) miny = y;
+            if (y > maxy) maxy = y;
+        }
+    }
+    a->x1 = (int32_t)minx - 4; a->y1 = (int32_t)miny - 4;
+    a->x2 = (int32_t)maxx + 4; a->y2 = (int32_t)maxy + 4;
+}
+
 void synthui_rotary_knob_set_angle(lv_obj_t *obj, float deg)
-{ LV_ASSERT_OBJ(obj, MY_CLASS); RK_SETTER(obj, angle, deg); }
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_rotary_knob_t *k = (synthui_rotary_knob_t *)obj;
+    if (k->angle == deg) return;
+    /* Wedge-delta damage: an angle change moves ONLY the index wedge (the
+     * discs are rotationally invariant), so damage the old and new wedge
+     * boxes instead of the whole control -- measured 4x on the all-16-knob
+     * workload (2026-08-27-rotary-knob-speed-findings.md). No bookkeeping
+     * is kept here: LVGL's inv buffer owns the damage (joining as it sees
+     * fit), and the GPU compositor scissors to the display's ACTUAL
+     * rendered areas, so both engines repaint exactly what was damaged
+     * however LVGL chooses to batch it. */
+    lv_area_t a;
+    wedge_bbox(k, k->angle, &a);
+    lv_obj_invalidate_area(obj, &a);
+    wedge_bbox(k, deg, &a);
+    k->angle = deg;
+    lv_obj_invalidate_area(obj, &a);
+}
 void synthui_rotary_knob_set_mode(lv_obj_t *obj, synthui_rotary_mode_t m)
 { LV_ASSERT_OBJ(obj, MY_CLASS); RK_SETTER(obj, mode, m); }
 void synthui_rotary_knob_set_theme(lv_obj_t *obj, synthui_rotary_theme_t t)
