@@ -120,7 +120,23 @@ static uint32_t abgr(uint32_t hex)
 
 static void render_ready_cb(lv_event_t *e)
 {
+    /* ★ SCISSOR TO THE DISPLAY'S ACTUAL RENDERED AREAS, per knob -- not to
+     * anything the widget recorded. The sw pass has just repainted
+     * ground+well inside exactly disp->inv_areas[] (however LVGL chose to
+     * JOIN what was invalidated -- a join can be a strict superset of any
+     * rect the widget knows about, and an unscissored full-rotor redraw
+     * would re-blend the body rim's AA over its own previous blend and
+     * drift toward pure body colour). Compositing the rotor scissored to
+     * each rendered area that touches the knob recreates a fresh render
+     * there and touches nothing else: exact for wedge-delta damage, full
+     * invalidations, and partial overlaps from OTHER objects alike (the
+     * Phase-2 "double-composite AA" caveat dies here). The areas are still
+     * populated at RENDER_READY -- it is sent from refr_invalid_areas,
+     * before refr_finish resets inv_p -- and joined slots are flagged, not
+     * rendered, so they are skipped.
+     * Spec: 2026-08-27-rotary-knob-delta-damage-design.md section 4. */
     LV_UNUSED(e);
+    lv_display_t *disp = lv_display_get_default();
     bool drew = false;
     for (synthui_rotary_knob_t *k = synthui_rotary_knob_list; k; k = k->next) {
         if (!k->gpu_pending) continue;
@@ -138,14 +154,28 @@ static void render_ready_cb(lv_event_t *e)
                           (float)coords.y1 + H * 0.5f, &m);
         vg_lite_rotate(k->angle, &m);
         vg_lite_scale(S / RK_FIX, S / RK_FIX, &m);
-        for (int p = 0; p < 3; p++)
-            GPU_TRY(vg_lite_draw(&s_target, &s_paths[p], VG_LITE_FILL_NON_ZERO,
-                                 &m, VG_LITE_BLEND_SRC_OVER, col[p]));
-        drew = true;
+        for (uint32_t i = 0; i < disp->inv_p; i++) {
+            if (disp->inv_area_joined[i]) continue;    /* merged, not drawn */
+            lv_area_t clip;
+            if (!lv_area_intersect(&clip, &disp->inv_areas[i], &coords))
+                continue;                              /* not this knob */
+            /* lv_area x2/y2 are inclusive; the driver's right/bottom are
+             * exclusive (checked against vg_lite.c's scissor clamp). */
+            GPU_TRY(vg_lite_set_scissor(clip.x1, clip.y1,
+                                        clip.x2 + 1, clip.y2 + 1));
+            for (int p = 0; p < 3; p++)
+                GPU_TRY(vg_lite_draw(&s_target, &s_paths[p],
+                                     VG_LITE_FILL_NON_ZERO, &m,
+                                     VG_LITE_BLEND_SRC_OVER, col[p]));
+            drew = true;
+        }
     }
-    /* Retire before anyone (checksums, scanout readers) touches the
-     * framebuffer -- reading earlier races the hardware (vglite_probe). */
-    if (drew) GPU_TRY(vg_lite_finish());
+    if (drew) {
+        GPU_TRY(vg_lite_set_scissor(-1, -1, -1, -1));  /* disable */
+        /* Retire before anyone (checksums, scanout readers) touches the
+         * framebuffer -- reading earlier races the hardware (vglite_probe). */
+        GPU_TRY(vg_lite_finish());
+    }
 }
 
 bool synthui_rotary_gpu_begin(void *framebuffer, int32_t w, int32_t h,
