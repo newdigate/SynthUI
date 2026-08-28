@@ -31,10 +31,17 @@ static bool             s_begun = false;
 static uint32_t         s_err = 0;
 #define GPU_TRY(call) do { if ((call) != VG_LITE_SUCCESS) s_err++; } while (0)
 
-/* ---- notch path build (bench rk_geometry, reduced to the one variant) ---- */
-#define RK_ARENA_WORDS 256
+/* ---- notch path build (bench rk_geometry, reduced to the one variant) ----
+ * The arena holds TWO regions: [0..s_frame_base) the rotor paths, built once
+ * at begin; [s_frame_base..) per-frame WELL paths (geometry varies per
+ * instance: mode, min/max, focus width), bump-allocated per pending knob and
+ * reset only AFTER vg_lite_finish -- safe whether the driver inlines path
+ * data into the command buffer or references it until submit. Sized for
+ * 16 knobs x (disc + full-annulus border or track+caps) with slack. */
+#define RK_ARENA_WORDS 4096
 static int32_t s_arena[RK_ARENA_WORDS];
 static size_t  s_used;
+static size_t  s_frame_base;
 static bool    s_overflow;
 
 static void emit(int32_t w)
@@ -90,15 +97,38 @@ static void emit_ring(float r0, float r1, float a1, float a2)
     emit_arc(r0, a2, a1);               /* reversed inner edge closes it */
     emit(VLC_OP_CLOSE);
 }
-static void finish_path(vg_lite_path_t *p, size_t start)
+/* Axis-aligned circle subpath centred at (x0, y0) -- for the track's rounded
+ * caps, whose centres sit off-origin. Same-direction subpaths union under
+ * non-zero winding, so caps and track ring share ONE path (and one colour):
+ * their overlap fills at winding 2 and the only AA is the union's outer
+ * boundary -- no cap/ring seam exists to drift. */
+static void emit_circle_xy(float x0, float y0, float r)
+{
+    const float c = 0.55228475f * r;    /* 4-segment Bezier circle constant */
+    emit(VLC_OP_MOVE);  emit(fx(x0)); emit(fx(y0 - r));
+    emit(VLC_OP_CUBIC); emit(fx(x0 + c)); emit(fx(y0 - r));
+    emit(fx(x0 + r)); emit(fx(y0 - c)); emit(fx(x0 + r)); emit(fx(y0));
+    emit(VLC_OP_CUBIC); emit(fx(x0 + r)); emit(fx(y0 + c));
+    emit(fx(x0 + c)); emit(fx(y0 + r)); emit(fx(x0)); emit(fx(y0 + r));
+    emit(VLC_OP_CUBIC); emit(fx(x0 - c)); emit(fx(y0 + r));
+    emit(fx(x0 - r)); emit(fx(y0 + c)); emit(fx(x0 - r)); emit(fx(y0));
+    emit(VLC_OP_CUBIC); emit(fx(x0 - r)); emit(fx(y0 - c));
+    emit(fx(x0 - c)); emit(fx(y0 - r)); emit(fx(x0)); emit(fx(y0 - r));
+    emit(VLC_OP_CLOSE);
+}
+static void finish_path_b(vg_lite_path_t *p, size_t start, float bound)
 {
     emit(VLC_OP_END);
     memset(p, 0, sizeof(*p));
     vg_lite_init_path(p, VG_LITE_S32, VG_LITE_HIGH,
                       (uint32_t)((s_used - start) * sizeof(int32_t)),
                       &s_arena[start],
-                      -41.0f * RK_FIX, -41.0f * RK_FIX,
-                      41.0f * RK_FIX, 41.0f * RK_FIX);
+                      -bound * RK_FIX, -bound * RK_FIX,
+                      bound * RK_FIX, bound * RK_FIX);
+}
+static void finish_path(vg_lite_path_t *p, size_t start)
+{
+    finish_path_b(p, start, 41.0f);
 }
 static bool build_paths(void)
 {
@@ -107,8 +137,49 @@ static bool build_paths(void)
     start = s_used; emit_circle(36.0f);                   finish_path(&s_paths[0], start);
     start = s_used; emit_circle(27.0f);                   finish_path(&s_paths[1], start);
     start = s_used; emit_ring(16.0f, 36.0f, -8.0f, 8.0f); finish_path(&s_paths[2], start);
+    s_frame_base = s_used;               /* well paths bump-allocate above */
     /* a truncated path set is a WRONG picture that still draws (bench rule) */
     return !s_overflow;
+}
+
+static uint32_t abgr(uint32_t hex);
+
+/* ---- per-frame WELL paths (gpu-well spec section 3) ----------------------
+ * Angle-independent by construction (drawn with m_fixed): disc r39 in the
+ * well colour, then EITHER the endless border ring r(39-bw)..39 (bw 3 on
+ * focus, else 1.6 -- LVGL's border-inside-radius convention) OR the bounded
+ * track: ring r41.5..44.5 min->max unioned with two r1.5 cap discs at
+ * P(43, min/max), one path, one colour (well_stroke -- which the palette
+ * already turns into the theme index colour on focus, matching sw). */
+#define RK_WELL_MAX_PATHS 2
+static int build_well_paths(const synthui_rotary_knob_t *k,
+                            const synthui_rotary_palette_t *pal,
+                            vg_lite_path_t *paths, uint32_t *cols)
+{
+    int n = 0;
+    size_t start;
+    start = s_used; emit_circle(39.0f);
+    finish_path(&paths[n], start); cols[n++] = abgr(pal->well);
+    if (k->mode == SYNTHUI_ROTARY_MODE_BOUNDED) {
+        float x, y;
+        start = s_used;
+        emit_ring(41.5f, 44.5f, k->min_deg, k->max_deg);
+        cpol(43.0f, k->min_deg, &x, &y); emit_circle_xy(x, y, 1.5f);
+        cpol(43.0f, k->max_deg, &x, &y); emit_circle_xy(x, y, 1.5f);
+        finish_path_b(&paths[n], start, 47.0f);
+        cols[n++] = abgr(pal->well_stroke);
+    } else {
+        const lv_state_t st = lv_obj_get_state((const lv_obj_t *)&k->obj);
+        const bool focus = (st & LV_STATE_FOCUSED) &&
+                           !(st & LV_STATE_DISABLED);
+        const float bw = focus ? 3.0f : 1.6f;
+        start = s_used;
+        emit_ring(39.0f - bw, 39.0f, 0.0f, 360.0f);
+        finish_path(&paths[n], start); cols[n++] = abgr(pal->well_stroke);
+    }
+    /* a truncated well is a wrong picture that still draws: count it where
+     * the transcripts demand a zero (rk_gpu_err) and draw nothing */
+    return s_overflow ? -1 : n;
 }
 
 /* vg_lite_color_t is ABGR -- red in the LOW byte (vglite_probe, measured). */
@@ -145,9 +216,12 @@ static uint32_t abgr(uint32_t hex)
  * renderer has always had this property (it draws discs as axis-aligned
  * circles and rotates only the wedge arc). */
 typedef struct {
-    const vg_lite_matrix_t *m_fixed;   /* translate * scale: discs */
+    const vg_lite_matrix_t *m_fixed;   /* translate * scale: well + discs */
     const vg_lite_matrix_t *m_rot;     /* translate * rotate * scale: wedge */
-    const uint32_t *col;
+    const uint32_t *col;               /* rotor colours (body, inner, wedge) */
+    const vg_lite_path_t *wpaths;      /* per-frame well paths (m_fixed) */
+    const uint32_t *wcols;
+    int wn;
 } rk_gpu_draw_ctx_t;
 
 static void composite_minus(const rk_gpu_draw_ctx_t *ctx, lv_area_t area,
@@ -181,6 +255,12 @@ static void composite_minus(const rk_gpu_draw_ctx_t *ctx, lv_area_t area,
     }
     /* lv_area x2/y2 inclusive; the driver's right/bottom exclusive. */
     GPU_TRY(vg_lite_set_scissor(area.x1, area.y1, area.x2 + 1, area.y2 + 1));
+    /* the sw painter's order: well first, then the rotor over it */
+    for (int p = 0; p < ctx->wn; p++)
+        GPU_TRY(vg_lite_draw(&s_target, (vg_lite_path_t *)&ctx->wpaths[p],
+                             VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)ctx->m_fixed,
+                             VG_LITE_BLEND_SRC_OVER, ctx->wcols[p]));
     for (int p = 0; p < 3; p++)
         GPU_TRY(vg_lite_draw(&s_target, &s_paths[p], VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)(p == 2 ? ctx->m_rot
@@ -226,7 +306,12 @@ static void render_ready_cb(lv_event_t *e)
         vg_lite_rotate(k->angle, &m_rot);
         vg_lite_scale(S / RK_FIX, S / RK_FIX, &m_fixed);
         vg_lite_scale(S / RK_FIX, S / RK_FIX, &m_rot);
-        const rk_gpu_draw_ctx_t ctx = { &m_fixed, &m_rot, col };
+        vg_lite_path_t wpaths[RK_WELL_MAX_PATHS];
+        uint32_t wcols[RK_WELL_MAX_PATHS];
+        int wn = build_well_paths(k, &pal, wpaths, wcols);
+        if (wn < 0) { s_err++; wn = 0; }   /* truncated well: error, not draw */
+        const rk_gpu_draw_ctx_t ctx = { &m_fixed, &m_rot, col,
+                                        wpaths, wcols, wn };
         lv_area_t done[LV_INV_BUF_SIZE];
         int ndone = 0;
         for (uint32_t i = 0; i < disp->inv_p; i++) {
@@ -246,6 +331,10 @@ static void render_ready_cb(lv_event_t *e)
          * framebuffer -- reading earlier races the hardware (vglite_probe). */
         GPU_TRY(vg_lite_finish());
     }
+    /* Reclaim the per-frame well paths -- only AFTER finish, in case the
+     * driver references (rather than copied) the path data until submit. */
+    s_used = s_frame_base;
+    s_overflow = false;
 }
 
 bool synthui_rotary_gpu_begin(void *framebuffer, int32_t w, int32_t h,
