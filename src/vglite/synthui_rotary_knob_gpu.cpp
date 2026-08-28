@@ -181,7 +181,20 @@ static int build_well_paths(const synthui_rotary_knob_t *k,
 {
     int n = 0;
     size_t start;
-    start = s_used; emit_circle(39.0f);
+    /* ★ ANNULUS r35..39, NOT the r39 disc, and the reason is on-glass, not
+     * aesthetic (found on 60 fps video, 2026-08-28): the compositor draws
+     * into the LIVE scanout buffer, so between "well drawn" and "body drawn"
+     * a damaged wedge box is ENTIRELY light well colour -- and when the
+     * LCDIF scanline crosses the box in that window the glass shows a white
+     * square for one 60 Hz scan, beating against the ~30 fps refresh about
+     * once a second. The body covers r<36 opaquely, so a disc under it buys
+     * nothing; with the annulus every intermediate state is nearly the
+     * final image (dark stays dark, only the thin rim and the wedge itself
+     * change) and the final pixels are identical -- the body's AA rim still
+     * blends over well-coloured underlay at r35..36. Structural fix for the
+     * residual sub-frame wedge shimmer would be double-buffered or
+     * vsync-fenced compositing; deferred, documented in the gpu-well spec. */
+    start = s_used; emit_ring(35.0f, 39.0f, 0.0f, 360.0f);
     finish_path(&paths[n], start); cols[n++] = abgr(pal->well);
     if (k->mode == SYNTHUI_ROTARY_MODE_BOUNDED) {
         start = s_used;
