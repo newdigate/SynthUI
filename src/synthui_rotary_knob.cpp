@@ -258,6 +258,14 @@ static void draw_arc_seg(lv_layer_t *layer, float cx, float cy, float S,
 
 static void rk_draw(synthui_rotary_knob_t *k, lv_layer_t *layer)
 {
+    /* GPU mode: the compositor draws EVERYTHING (well + rotor) per rendered
+     * area -- moving the well off the CPU is the measured 30 fps lever (the
+     * clipped well repaints were the entire 38 ms residual at delta damage,
+     * gpu-well spec section 1). DRAW_MAIN only marks the instance; LVGL
+     * paints the screen ground beneath. sw mode is untouched, so every QEMU
+     * golden and the sw delta guards stand. */
+    if (synthui_rotary_gpu_enabled) { k->gpu_pending = true; return; }
+
     lv_obj_t *obj = &k->obj;
     lv_area_t coords; lv_obj_get_coords(obj, &coords);
     const float W = (float)lv_area_get_width(&coords);
@@ -288,9 +296,6 @@ static void rk_draw(synthui_rotary_knob_t *k, lv_layer_t *layer)
     if (k->mode == SYNTHUI_ROTARY_MODE_BOUNDED)
         draw_arc_seg(layer, cx, cy, S, 44.5f, 3.0f, k->min_deg, k->max_deg,
                      pal.well_stroke, true);
-
-    /* rotor: GPU-composited post-render when the hook is live */
-    if (synthui_rotary_gpu_enabled) { k->gpu_pending = true; return; }
 
     lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
     d.radius = LV_RADIUS_CIRCLE; d.bg_opa = LV_OPA_COVER;
