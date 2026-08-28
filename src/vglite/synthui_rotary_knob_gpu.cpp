@@ -26,6 +26,7 @@ extern "C" {
 #define RK_FIX 16.0f
 
 static vg_lite_buffer_t s_target;
+static vg_lite_buffer_t *s_cur_target = &s_target;   /* pass-scoped target */
 static vg_lite_path_t   s_paths[3];      /* body, inner, index wedge */
 static bool             s_begun = false;
 static uint32_t         s_err = 0;
@@ -290,16 +291,18 @@ static void composite_minus(const rk_gpu_draw_ctx_t *ctx, lv_area_t area,
     GPU_TRY(vg_lite_set_scissor(area.x1, area.y1, area.x2 + 1, area.y2 + 1));
     /* the sw painter's order: well first, then the rotor over it */
     for (int p = 0; p < ctx->wn; p++)
-        GPU_TRY(vg_lite_draw(&s_target, (vg_lite_path_t *)&ctx->wpaths[p],
+        GPU_TRY(vg_lite_draw(s_cur_target, (vg_lite_path_t *)&ctx->wpaths[p],
                              VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)ctx->m_fixed,
                              VG_LITE_BLEND_SRC_OVER, ctx->wcols[p]));
     for (int p = 0; p < 3; p++)
-        GPU_TRY(vg_lite_draw(&s_target, &s_paths[p], VG_LITE_FILL_NON_ZERO,
+        GPU_TRY(vg_lite_draw(s_cur_target, &s_paths[p], VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)(p == 2 ? ctx->m_rot
                                                          : ctx->m_fixed),
                              VG_LITE_BLEND_SRC_OVER, ctx->col[p]));
 }
+
+static void compose_pass(void);
 
 static void render_ready_cb(lv_event_t *e)
 {
@@ -319,6 +322,13 @@ static void render_ready_cb(lv_event_t *e)
      * rendered, so they are skipped.
      * Spec: 2026-08-27-rotary-knob-delta-damage-design.md section 4. */
     LV_UNUSED(e);
+    s_cur_target = &s_target;
+    compose_pass();
+}
+
+/* One composite pass over every pending instance, into *s_cur_target. */
+static void compose_pass(void)
+{
     lv_display_t *disp = lv_display_get_default();
     bool drew = false;
     for (synthui_rotary_knob_t *k = synthui_rotary_knob_list; k; k = k->next) {
@@ -398,3 +408,50 @@ bool synthui_rotary_gpu_begin(void *framebuffer, int32_t w, int32_t h,
 }
 
 uint32_t synthui_rotary_gpu_errors(void) { return s_err; }
+
+/* ---- deferred (double-buffered) mode: see the header ---- */
+static int32_t s_def_w, s_def_h, s_def_stride;
+static vg_lite_buffer_t s_def_targets[2];
+static void *s_def_ptrs[2];
+static int s_def_n = 0;
+
+bool synthui_rotary_gpu_begin_deferred(int32_t w, int32_t h,
+                                       int32_t stride_bytes)
+{
+    if (s_begun) return true;
+    if (!build_paths()) return false;
+    s_def_w = w; s_def_h = h; s_def_stride = stride_bytes;
+    s_def_n = 0;
+    synthui_rotary_gpu_enabled = true;
+    s_begun = true;
+    return true;
+}
+
+void synthui_rotary_gpu_compose_into(uint8_t *framebuffer)
+{
+    if (!synthui_rotary_gpu_enabled || framebuffer == NULL) return;
+    /* lazy wrap+map: a flip display alternates between exactly two buffers */
+    int i;
+    for (i = 0; i < s_def_n; i++)
+        if (s_def_ptrs[i] == framebuffer) break;
+    if (i == s_def_n) {
+        if (s_def_n >= 2) { s_err++; return; }   /* a third buffer is a bug */
+        vg_lite_buffer_t *t = &s_def_targets[s_def_n];
+        memset(t, 0, sizeof(*t));
+        t->width   = s_def_w;
+        t->height  = s_def_h;
+        t->stride  = s_def_stride;
+        t->tiled   = VG_LITE_LINEAR;
+        t->format  = VG_LITE_BGRA8888;   /* = panel XRGB8888 memory order */
+        t->memory  = framebuffer;
+        t->address = (uint32_t)(uintptr_t)framebuffer;
+        if (vg_lite_map(t, VG_LITE_MAP_USER_MEMORY, 0) != VG_LITE_SUCCESS) {
+            s_err++;
+            return;
+        }
+        s_def_ptrs[s_def_n++] = framebuffer;
+    }
+    s_cur_target = &s_def_targets[i];
+    compose_pass();
+    s_cur_target = &s_target;
+}

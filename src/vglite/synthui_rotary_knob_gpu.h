@@ -26,6 +26,21 @@ bool synthui_rotary_gpu_begin(void *framebuffer, int32_t w, int32_t h,
  * examples must print this and hardware transcripts must show 0. */
 uint32_t synthui_rotary_gpu_errors(void);
 
+/* --- deferred (double-buffered) mode --------------------------------------
+ * For displays that render off-screen and flip (lvgl_mipi_panel_create_db):
+ * begin_deferred() arms the widgets (well+rotor move to the GPU) but hooks
+ * NOTHING -- the app wires compose_into() as the display binding's pre-flip
+ * callback, and the compositor draws into whatever back buffer it is handed
+ * (buffers are wrapped and mapped lazily on first sight; two are expected).
+ * This ordering -- compose BEFORE the flip request, into an off-screen
+ * buffer -- is what makes the composite tear-free by construction; the
+ * single-buffer begin() composites into live scanout and can flash a
+ * damage-box-sized square when the scanline crosses mid-composite (seen on
+ * 60 fps video). Same-frame geometry, same colors, same guards. */
+bool synthui_rotary_gpu_begin_deferred(int32_t w, int32_t h,
+                                       int32_t stride_bytes);
+void synthui_rotary_gpu_compose_into(uint8_t *framebuffer);
+
 #ifdef __cplusplus
 }
 #endif
