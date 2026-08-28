@@ -97,23 +97,46 @@ static void emit_ring(float r0, float r1, float a1, float a2)
     emit_arc(r0, a2, a1);               /* reversed inner edge closes it */
     emit(VLC_OP_CLOSE);
 }
-/* Axis-aligned circle subpath centred at (x0, y0) -- for the track's rounded
- * caps, whose centres sit off-origin. Same-direction subpaths union under
- * non-zero winding, so caps and track ring share ONE path (and one colour):
- * their overlap fills at winding 2 and the only AA is the union's outer
- * boundary -- no cap/ring seam exists to drift. */
-static void emit_circle_xy(float x0, float y0, float r)
+/* Arc segment centred at (cx0, cy0) -- same tangent construction as
+ * emit_arc, translated. Translation commutes with Bezier control points, so
+ * the offset applies to every emitted coordinate. Used for the track's
+ * rounded end caps, which are 180-degree arcs around off-origin centres. */
+static void emit_arc_at(float cx0, float cy0, float r, float a1, float a2)
 {
-    const float c = 0.55228475f * r;    /* 4-segment Bezier circle constant */
-    emit(VLC_OP_MOVE);  emit(fx(x0)); emit(fx(y0 - r));
-    emit(VLC_OP_CUBIC); emit(fx(x0 + c)); emit(fx(y0 - r));
-    emit(fx(x0 + r)); emit(fx(y0 - c)); emit(fx(x0 + r)); emit(fx(y0));
-    emit(VLC_OP_CUBIC); emit(fx(x0 + r)); emit(fx(y0 + c));
-    emit(fx(x0 + c)); emit(fx(y0 + r)); emit(fx(x0)); emit(fx(y0 + r));
-    emit(VLC_OP_CUBIC); emit(fx(x0 - c)); emit(fx(y0 + r));
-    emit(fx(x0 - r)); emit(fx(y0 + c)); emit(fx(x0 - r)); emit(fx(y0));
-    emit(VLC_OP_CUBIC); emit(fx(x0 - r)); emit(fx(y0 - c));
-    emit(fx(x0 - c)); emit(fx(y0 - r)); emit(fx(x0)); emit(fx(y0 - r));
+    const float span = a2 - a1;
+    int nseg = (int)ceilf(fabsf(span) / 90.0f);
+    if (nseg < 1) nseg = 1;
+    const float step = span / (float)nseg;
+    const float d = (4.0f / 3.0f) * tanf(step * RK_DEG / 4.0f) * r;
+    for (int i = 0; i < nseg; i++) {
+        const float b1 = a1 + (float)i * step, b2 = b1 + step;
+        float x1, y1, x2, y2;
+        cpol(r, b1, &x1, &y1); x1 += cx0; y1 += cy0;
+        cpol(r, b2, &x2, &y2); x2 += cx0; y2 += cy0;
+        emit(VLC_OP_CUBIC);
+        emit(fx(x1 + d * cosf(b1 * RK_DEG))); emit(fx(y1 + d * sinf(b1 * RK_DEG)));
+        emit(fx(x2 - d * cosf(b2 * RK_DEG))); emit(fx(y2 - d * sinf(b2 * RK_DEG)));
+        emit(fx(x2)); emit(fx(y2));
+    }
+}
+/* The bounded track as ONE SIMPLE CONTOUR (winding 1 everywhere): outer arc
+ * min->max, 180-degree cap arc around P(43,max), inner arc max->min
+ * reversed, 180-degree cap arc around P(43,min), close. The first version
+ * unioned a ring with two overlapping cap circles in one path -- winding-2
+ * regions -- and that was the ONLY geometry in the system whose rendering
+ * varied per boot (bounded screens only; endless/rotor bit-stable), so
+ * multi-subpath overlap is treated as hardware-hostile here and avoided. */
+static void emit_track(float min_deg, float max_deg)
+{
+    float x, y;
+    cpol(44.5f, min_deg, &x, &y);
+    emit(VLC_OP_MOVE); emit(fx(x)); emit(fx(y));
+    emit_arc(44.5f, min_deg, max_deg);            /* outer edge */
+    cpol(43.0f, max_deg, &x, &y);
+    emit_arc_at(x, y, 1.5f, max_deg, max_deg + 180.0f);   /* end cap */
+    emit_arc(41.5f, max_deg, min_deg);            /* inner edge, reversed */
+    cpol(43.0f, min_deg, &x, &y);
+    emit_arc_at(x, y, 1.5f, min_deg + 180.0f, min_deg + 360.0f); /* start cap */
     emit(VLC_OP_CLOSE);
 }
 static void finish_path_b(vg_lite_path_t *p, size_t start, float bound)
@@ -161,11 +184,8 @@ static int build_well_paths(const synthui_rotary_knob_t *k,
     start = s_used; emit_circle(39.0f);
     finish_path(&paths[n], start); cols[n++] = abgr(pal->well);
     if (k->mode == SYNTHUI_ROTARY_MODE_BOUNDED) {
-        float x, y;
         start = s_used;
-        emit_ring(41.5f, 44.5f, k->min_deg, k->max_deg);
-        cpol(43.0f, k->min_deg, &x, &y); emit_circle_xy(x, y, 1.5f);
-        cpol(43.0f, k->max_deg, &x, &y); emit_circle_xy(x, y, 1.5f);
+        emit_track(k->min_deg, k->max_deg);
         finish_path_b(&paths[n], start, 47.0f);
         cols[n++] = abgr(pal->well_stroke);
     } else {

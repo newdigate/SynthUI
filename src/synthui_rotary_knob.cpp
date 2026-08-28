@@ -133,14 +133,20 @@ void synthui_rotary_knob_set_angle(lv_obj_t *obj, float deg)
     LV_ASSERT_OBJ(obj, MY_CLASS);
     synthui_rotary_knob_t *k = (synthui_rotary_knob_t *)obj;
     if (k->angle == deg) return;
-    /* Wedge-delta damage: an angle change moves ONLY the index wedge (the
-     * discs are rotationally invariant), so damage the old and new wedge
-     * boxes instead of the whole control -- measured 4x on the all-16-knob
-     * workload (2026-08-27-rotary-knob-speed-findings.md). No bookkeeping
-     * is kept here: LVGL's inv buffer owns the damage (joining as it sees
-     * fit), and the GPU compositor scissors to the display's ACTUAL
-     * rendered areas, so both engines repaint exactly what was damaged
-     * however LVGL chooses to batch it. */
+    /* Wedge-delta damage, BOTH engines: an angle change moves ONLY the
+     * index wedge (the discs are rotationally invariant), so damage the old
+     * and new wedge boxes instead of the whole control. sw: LVGL clips the
+     * draw callback, exact by construction. gpu: the compositor re-renders
+     * well+rotor scissored to the rendered areas -- proven pixel-identical
+     * to a fresh full render by the delta equality guard, three boots
+     * bit-stable at 42.4 fps on the all-16 worst case (2026-08-28).
+     * ★ That guard is LOAD-BEARING history, not ceremony: the gpu delta
+     * path failed it TWICE before shipping -- rotated-Bezier disc AA, then
+     * a boot-random fill inversion that turned out to be the OLD
+     * multi-subpath track poisoning tessellation state (see emit_track in
+     * the gpu TU). Any change here or in the compositor must hold the guard
+     * on silicon across REPEATED boots -- single-boot evidence was what let
+     * the second defect hide. */
     lv_area_t a;
     wedge_bbox(k, k->angle, &a);
     lv_obj_invalidate_area(obj, &a);
