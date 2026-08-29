@@ -7,10 +7,16 @@
  * fader's CURRENT cap_y baked in, and ONE matrix per fader
  * (translate(coords) * scale(u/16)) maps them to the screen -- a fader has
  * no rotation, so the rotary's two-matrix AA lesson does not arise. Ticks
- * are batched into two DISJOINT multi-rect paths (bright / dim); disjoint
- * subpaths are winding-1 everywhere, unlike the OVERLAPPING subpaths that
- * were the rotary's one source of per-boot nondeterminism (its emit_track
- * comment) -- overlap stays banned here.
+ * are batched into two multi-rect paths (bright / dim); adjacent ticks
+ * whose rects would overlap (spacing < tick_w) are COALESCED into one run
+ * rect rather than emitted as separate overlapping rects -- the union of
+ * overlapping same-x axis-aligned rects is itself a rect, so this is
+ * visually identical and is what ENFORCES winding-1 everywhere, rather than
+ * assuming non-overlap happens to hold. Overlapping subpaths were the
+ * rotary's one source of per-boot nondeterminism (its emit_track comment);
+ * unlike the rotary's fixed geometry, tick spacing here varies with vh and
+ * travel and coincides at travel=0, so coalescing -- not spacing -- is what
+ * keeps winding at 1.
  * The cap gradient uses cached vg_lite_linear_gradient_t ramps (one per
  * band per palette state, built lazily) with a per-frame gradient matrix;
  * ramps are never rebuilt per frame (the NEW-12 per-frame-construction
@@ -33,14 +39,33 @@ static bool     s_begun = false;
 static uint32_t s_err = 0;
 #define GPU_TRY(call) do { if ((call) != VG_LITE_SUCCESS) s_err++; } while (0)
 
-/* ---- per-frame path arena (the rotary's, sized for 16 faders) -----------
- * Worst case per fader: panel(17) + ticks up to 33 rects in two paths
- * (~540) + rod(45) + center(17) + shadow(45) + base(45) + 2 grad bands(34)
- * + groove(17) + 2 gloss(34) ~= 800 words; x16 ~= 12.8K. 16384 leaves
- * headroom; overflow is COUNTED and draws nothing (a truncated path set is
- * a wrong picture that still draws -- the bench rule). Reset only AFTER
- * vg_lite_finish, in case the driver references path data until submit. */
-#define FD_ARENA_WORDS 16384
+/* ---- per-draw-call path arena --------------------------------------------
+ * ★ Sized for ONE draw_fader_clipped() call, NOT one frame. The first
+ * version of this file sized the arena for "16 faders" (one call each), but
+ * composite_minus() calls draw_fader_clipped() once per DISJOINT CLIP PIECE
+ * per fader -- two overlapping inv_areas on one fader can split into up to
+ * 5 pieces, so 16 faders can mean up to ~80 calls/frame, ~37K words against
+ * a 16384-word arena. A press + a drag landing in the same LVGL frame is a
+ * realistic trigger. Truncating mid-path drops the VLC_OP_END, and
+ * vg_lite_init_path()'s CLOSE->END fixup can then rewrite a coordinate word
+ * -- corrupting the arena rather than merely mis-sizing it.
+ * ★ This is fixed, not just detected, by a driver fact: vg_lite_draw() ->
+ * push_data() (vg_lite_path.c ~3291, taken because vg_lite_init_path() never
+ * sets VLM_PATH_GET_UPLOAD_BIT) memcpys the path words into the command
+ * buffer BEFORE returning. So the arena is safe to reuse the instant the
+ * PRECEDING vg_lite_draw()/vg_lite_draw_grad() call returns -- draw_fader_
+ * clipped() resets s_used to 0 on entry (see there), and the true peak is
+ * ONE fader's shapes, worst case ~722 words at 33 ticks: panel/center/one
+ * grad band/groove/one gloss rect ~14 words each, rod/shadow/base ~45 words
+ * each, border ring ~58 words, ticks up to ~431 words (33 emit_rects, worst
+ * case not coalesced) -- comfortably inside 2048 with margin for the
+ * per-band gradient rect's own finish_path call. Overflow is still COUNTED
+ * and REFUSED (finish_path() returns false; a truncated path set is a wrong
+ * picture that still draws -- worse here, since it is exactly what hangs
+ * the Vivante front end while every call still reports SUCCESS). The
+ * frame-level reset in compose_pass() (after vg_lite_finish) is kept as
+ * belt-and-braces, not as the mechanism that makes this safe. */
+#define FD_ARENA_WORDS 2048
 static int32_t s_arena[FD_ARENA_WORDS];
 static size_t  s_used;
 static bool    s_overflow;
@@ -103,15 +128,27 @@ static void emit_border_ring(float x, float y, float w, float h, float r,
     emit(VLC_OP_CLOSE);
 }
 
-static void finish_path(vg_lite_path_t *p, size_t start, float x0, float y0,
+/* Returns false when the path was truncated by the arena (see FD_ARENA_WORDS
+ * above); the caller must not draw in that case. A truncated path has no
+ * VLC_OP_END and is a WRONG PICTURE THAT STILL DRAWS -- worse here than
+ * elsewhere, since unterminated path data is exactly what hangs the Vivante
+ * front end while every vg_lite_* call keeps returning VG_LITE_SUCCESS (the
+ * Phase-1 finding). Bounds are padded ~1 viewBox unit on every side: the
+ * driver derives its tessellation window from this box (rounded, not exact
+ * -- vg_lite_path.c's ts_is_fullscreen logic), and an exact bound can land a
+ * half-pixel short at a tile boundary. */
+static bool finish_path(vg_lite_path_t *p, size_t start, float x0, float y0,
                         float x1, float y1)
 {
     emit(VLC_OP_END);
+    if (s_overflow) return false;
     memset(p, 0, sizeof(*p));
     vg_lite_init_path(p, VG_LITE_S32, VG_LITE_HIGH,
                       (uint32_t)((s_used - start) * sizeof(int32_t)),
                       &s_arena[start],
-                      x0 * FD_FIX, y0 * FD_FIX, x1 * FD_FIX, y1 * FD_FIX);
+                      (x0 - 1.0f) * FD_FIX, (y0 - 1.0f) * FD_FIX,
+                      (x1 + 1.0f) * FD_FIX, (y1 + 1.0f) * FD_FIX);
+    return true;
 }
 
 /* vg_lite_color_t is ABGR -- red in the LOW byte (vglite_probe, measured);
@@ -120,6 +157,19 @@ static uint32_t abgr_a(uint32_t hex, uint32_t a)
 {
     return (a << 24) | ((hex & 0xFFu) << 16) | (hex & 0xFF00u)
            | ((hex >> 16) & 0xFFu);
+}
+
+/* The gradient RAMP is an IMAGE word (VG_LITE_BGRA8888 = bytes B,G,R,A =
+ * the little-endian word 0xAARRGGBB), NOT a vg_lite_color_t (ABGR). LVGL
+ * swaps R/B for exactly this reason before packing through its own ABGR
+ * packer (lv_vg_lite_grad.c: `lv_color_make(c->blue, c->green, c->red)`,
+ * verified against that source -- the double swap nets ARGB). Getting this
+ * wrong is near-invisible on grey caps (the near-neutral colors here differ
+ * by only Delta 1-7) and wrong on any themed colour, which is exactly why
+ * it must be fixed now rather than baked into a GPU golden as "correct". */
+static uint32_t argb_a(uint32_t hex, uint32_t a)
+{
+    return (a << 24) | (hex & 0x00FFFFFFu);
 }
 
 /* ---- cached gradient ramps: one per band per palette state --------------
@@ -141,10 +191,14 @@ static vg_lite_linear_gradient_t *grad_get(int band, int stidx,
          * uint32_t is `long unsigned int` -- same width, different type, so
          * C++ requires the exact type here rather than relying on the
          * build's -fpermissive to downgrade the mismatch to a warning. */
-        vg_lite_uint32_t cols[2] = { abgr_a(c_top, 0xFFu), abgr_a(c_bot, 0xFFu) };
+        vg_lite_uint32_t cols[2] = { argb_a(c_top, 0xFFu), argb_a(c_bot, 0xFFu) };
         vg_lite_uint32_t stops[2] = { 0, 255 };
-        GPU_TRY(vg_lite_set_grad(g, 2, cols, stops));
-        GPU_TRY(vg_lite_update_grad(g));
+        /* Only cache as ready when BOTH calls succeeded -- caching a broken
+         * ramp on a failed set/update would draw a stale or garbage ramp
+         * forever while counting the error exactly once. */
+        const bool ok = vg_lite_set_grad(g, 2, cols, stops) == VG_LITE_SUCCESS
+                      && vg_lite_update_grad(g) == VG_LITE_SUCCESS;
+        if (!ok) { s_err++; return NULL; }
         s_grad_ready[band][stidx] = true;
     }
     return &s_grads[band][stidx];
@@ -208,6 +262,14 @@ static void composite_minus(const fd_gpu_ctx_t *ctx, lv_area_t area,
 static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
 {
     (void)clip;
+    /* Reset the per-draw-call arena HERE, not once per frame: vg_lite_draw()
+     * copies (memcpy, push_data) every path's words into the command buffer
+     * before returning (see FD_ARENA_WORDS above), so nothing from a prior
+     * call to this function -- a different clip piece, a different fader --
+     * is still needed once that prior call's vg_lite_draw()s have returned.
+     * This is what shrinks the real peak from "the whole frame" (up to ~80
+     * calls) to "one fader's shapes" (~722 words worst case). */
+    s_used = 0;
     const synthui_fader_geom_t *g = c->g;
     const synthui_fader_palette_t *pal = c->pal;
     const float ch = g->cap_h, cy = c->cap_y, bw = 1.6f;
@@ -216,64 +278,72 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
 
     /* panel */
     start = s_used; emit_rect(0.0f, 0.0f, 100.0f, g->vh);
-    finish_path(&p, start, 0.0f, 0.0f, 100.0f, g->vh);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(c->f->panel, 0xFFu)));
+    if (finish_path(&p, start, 0.0f, 0.0f, 100.0f, g->vh))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(c->f->panel, 0xFFu)));
 
-    /* ticks: two disjoint multi-rect paths (bright i%4==0 at 158, dim 87);
-     * tick_w in units, drawn as thin rects centred on the tick y. */
+    /* ticks: two multi-rect paths (bright i%4==0 at 158, dim 87); tick_w in
+     * units, drawn as thin rects centred on the tick y. Adjacent ticks in
+     * the SAME pass whose rects would overlap (spacing = travel/(n-1) <
+     * tick_w) are COALESCED into one run rect -- this is what ENFORCES
+     * winding-1, since spacing shrinks below tick_w at large vh/small n and
+     * collapses to 0 at travel=0 (the file header's coalescing note). */
     const float tick_w = fmaxf(1.4f, 0.012f * g->vh);
     const int n = c->f->ticks;
     for (int pass = 0; pass < 2; pass++) {
         start = s_used;
         int emitted = 0;
+        float run_y0 = 0.0f, run_y1 = 0.0f;
         for (int i = 0; i < n; i++) {
             const bool bright = (i % 4 == 0);
             if (bright != (pass == 0)) continue;
             const float ty = g->top + ch * 0.5f
                              + (float)i * g->travel / (float)(n - 1);
-            emit_rect(8.0f, ty - tick_w * 0.5f, 84.0f, tick_w);
-            emitted++;
+            const float y0 = ty - tick_w * 0.5f, y1 = ty + tick_w * 0.5f;
+            if (emitted && y0 <= run_y1) { run_y1 = y1; continue; } /* extend */
+            if (emitted) emit_rect(8.0f, run_y0, 84.0f, run_y1 - run_y0);
+            run_y0 = y0; run_y1 = y1; emitted++;
         }
+        if (emitted) emit_rect(8.0f, run_y0, 84.0f, run_y1 - run_y0);
         if (!emitted) { s_used = start; continue; }
-        finish_path(&p, start, 8.0f, 0.0f, 92.0f, g->vh);
-        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                             abgr_a(pal->ticks, pass == 0 ? 158u : 87u)));
+        if (finish_path(&p, start, 8.0f, 0.0f, 92.0f, g->vh))
+            GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                 (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                                 abgr_a(pal->ticks, pass == 0 ? 158u : 87u)));
     }
 
     /* rod */
     start = s_used;
     emit_round_rect(46.5f, g->top + ch * 0.5f - 2.0f, 7.0f,
                     g->travel + 4.0f, 1.5f);
-    finish_path(&p, start, 46.5f, 0.0f, 53.5f, g->vh);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(0x14181Bu, 0xFFu)));
+    if (finish_path(&p, start, 46.5f, 0.0f, 53.5f, g->vh))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(0x14181Bu, 0xFFu)));
 
     /* center-detent line */
     if (c->f->center) {
         const float cyl = g->top + ch * 0.5f + g->travel * 0.5f;
         start = s_used; emit_rect(4.0f, cyl - 1.2f, 92.0f, 2.4f);
-        finish_path(&p, start, 4.0f, cyl - 1.2f, 96.0f, cyl + 1.2f);
-        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                             abgr_a(pal->center, 0xFFu)));
+        if (finish_path(&p, start, 4.0f, cyl - 1.2f, 96.0f, cyl + 1.2f))
+            GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                 (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                                 abgr_a(pal->center, 0xFFu)));
     }
 
     /* cap: shadow, base, grad x2, groove, gloss x2, border ring */
     start = s_used; emit_round_rect(6.0f, cy + 2.5f, 88.0f, ch, 2.0f);
-    finish_path(&p, start, 6.0f, cy, 94.0f, cy + ch + 3.0f);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(0x1B1F22u, 115u)));
+    if (finish_path(&p, start, 6.0f, cy, 94.0f, cy + ch + 3.0f))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(0x1B1F22u, 115u)));
 
     start = s_used; emit_round_rect(4.0f, cy, 88.0f, ch, 2.0f);
-    finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(pal->cap_mid, 0xFFu)));
+    if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(pal->cap_mid, 0xFFu)));
 
     /* gradient bands, inset inside the border; the grad matrix maps the
      * 256x1 ramp along +x, so: fader matrix, then translate to the band
@@ -291,8 +361,9 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
         if (gr == NULL) continue;
         start = s_used;
         emit_rect(4.0f + bw, bands[b].y0, 88.0f - 2.0f * bw, bands[b].h);
-        finish_path(&p, start, 4.0f + bw, bands[b].y0,
-                    92.0f - bw, bands[b].y0 + bands[b].h);
+        if (!finish_path(&p, start, 4.0f + bw, bands[b].y0,
+                         92.0f - bw, bands[b].y0 + bands[b].h))
+            continue;
         vg_lite_matrix_t *gm = vg_lite_get_grad_matrix(gr);
         *gm = *(vg_lite_matrix_t *)c->m;
         vg_lite_translate((4.0f + bw) * FD_FIX, bands[b].y0 * FD_FIX, gm);
@@ -304,32 +375,33 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
     }
 
     start = s_used; emit_rect(4.0f, cy + 0.43f * ch, 88.0f, 0.14f * ch);
-    finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(0x20262Au, 0xFFu)));
+    if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(0x20262Au, 0xFFu)));
 
     const float gh = fmaxf(1.5f, 0.12f * ch);
     for (int s = 0; s < 2; s++) {
         const float gy = cy + (s ? 0.68f : 0.16f) * ch;
         start = s_used; emit_rect(9.0f, gy, 78.0f, gh);
-        finish_path(&p, start, 9.0f, gy, 87.0f, gy + gh);
-        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                             abgr_a(0xFFFFFFu, pal->gloss_opa)));
+        if (finish_path(&p, start, 9.0f, gy, 87.0f, gy + gh))
+            GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                 (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                                 abgr_a(0xFFFFFFu, pal->gloss_opa)));
     }
 
     start = s_used; emit_border_ring(4.0f, cy, 88.0f, ch, 2.0f, bw);
-    finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch);
-    GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                         (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                         abgr_a(0x20262Au, 0xFFu)));
+    if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(0x20262Au, 0xFFu)));
 }
 
 /* One composite pass over every pending instance, into *s_cur_target. */
 static void compose_pass(void)
 {
     lv_display_t *disp = lv_display_get_default();
+    if (disp == NULL) return;   /* nothing to composite into (rotary's guard) */
     bool drew = false;
     for (synthui_fader_t *f = synthui_fader_list; f; f = f->next) {
         if (!f->gpu_pending) continue;

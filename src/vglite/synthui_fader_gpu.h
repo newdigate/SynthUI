@@ -17,8 +17,20 @@ extern "C" {
  * section 4). Call AFTER vg_lite_init() succeeded (app owns the chip-ID
  * probe -- vg_lite_init SPINS on absent hardware) and AFTER the LVGL display
  * exists. Arms the widgets (all drawing moves to the GPU); the app wires
- * compose_into() as the panel binding's pre-flip callback. Returns false --
- * and changes nothing -- on any failure. */
+ * compose_into() as the panel binding's pre-flip callback. Idempotent
+ * (a second call is a no-op returning true); it records the target
+ * dimensions and always succeeds -- unlike the rotary's begin(), there is no
+ * up-front buffer to map or path set to build, so it has no failure path.
+ * Per-frame failures (a rejected vg_lite_* call, or an overflowed per-call
+ * path arena) are instead counted in synthui_fader_gpu_errors().
+ *
+ * ★ The compositor's per-call scissoring only clamps the tessellation
+ * window when the driver's ts_is_fullscreen test is false (vg_lite_draw(),
+ * vg_lite_path.c) -- which requires a scissor SMALLER than the target, which
+ * in turn requires vg_lite_init() to have been called with tessellation
+ * dimensions SMALLER than the panel (the examples use 256x256 against a
+ * 720x1280 panel). Calling vg_lite_init() with the panel's own size defeats
+ * per-fader scissoring here. */
 bool synthui_fader_gpu_begin_deferred(int32_t w, int32_t h,
                                       int32_t stride_bytes);
 void synthui_fader_gpu_compose_into(uint8_t *framebuffer);
