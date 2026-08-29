@@ -110,7 +110,9 @@ static float fd_cap_y(const fd_geom_t *g, float value)
  * shadow -- x 3.2..94 units, y capY-0.8 .. capY+capH+2.5 -- rounded outward
  * and inflated 2 px (px, not units).  This is the ONLY damage a value
  * change produces, so these literals BOUND what fd_draw paints for the cap
- * (shadow right edge 94, body-with-stroke left edge 3.2).  Widen or move
+ * (shadow right edge 94, left edge 3.2 = body edge 4.0 minus 0.8 slack
+ * (LVGL borders sit INSIDE the rect, so the drawn edge is 4.0 -- the
+ * slack is deliberate over-cover)).  Widen or move
  * any cap element and this box must follow -- the delta-equality guard in
  * examples/display/synthui_fader_test (its gate compares a delta-sequence
  * checksum against a fresh full render, every boot) is what catches the
@@ -270,6 +272,9 @@ static void fd_hline(lv_layer_t *layer, float x0, float y0, float xa,
     l.opa = opa;
     l.width = (int32_t)lroundf(w_units * u);
     if (l.width < 1) l.width = 1;
+    /* lroundf + explicit casts: lv_point_precise_t is int32 OR float by
+     * LV_USE_FLOAT, and a naked float assignment truncates -- rounding to
+     * an integral value first keeps both builds pixel-identical. */
     l.p1.x = (lv_value_precise_t)lroundf(x0 + xa * u);
     l.p1.y = (lv_value_precise_t)lroundf(y0 + y * u);
     l.p2.x = (lv_value_precise_t)lroundf(x0 + xb * u);
