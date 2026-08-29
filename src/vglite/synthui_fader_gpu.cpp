@@ -18,6 +18,26 @@
  * travel and coincides at travel=0, so coalescing -- not spacing -- is what
  * keeps winding at 1.
  *
+ * The cap's border was originally a stroked RING -- an outer rounded
+ * contour plus a reversed inner contour in one path, relying on non-zero
+ * winding to cut the hole (this file's counterpart to the rotary's
+ * emit_ring). Unlike the rotary's ring, which is a single simple contour
+ * (one MOVE/CLOSE: the outer edge, a LINE across, the reversed inner edge,
+ * CLOSE -- the keyhole technique), this file's ring was TWO nested
+ * opposite-winding subpaths (two separate VLC_OP_MOVEs). On GC355 silicon
+ * that geometry rendered the whole cap SOLID in the border colour and the
+ * full-framebuffer checksum differed on every one of 7 boots across two
+ * builds, with fd_gpu_err=0 throughout (2026-08-29) -- the same
+ * per-boot-nondeterminism class the rotary's emit_track comment records for
+ * overlapping subpaths (see above). Fixed by eliminating the ring rather
+ * than trying to make the winding work: the border is now a plain filled
+ * rounded-rect PLATE drawn FIRST, with the base/bands/groove inset by bw on
+ * top of it, so the border shows as a margin rather than a cut hole. The
+ * rule this file follows as a result: every path here is either a single
+ * simple contour, or several DISJOINT SAME-WINDING contours (the tick
+ * batches, per the coalescing note above); nested opposite-winding contours
+ * are banned.
+ *
  * The cap bands are drawn as FD_GRAD_STRIPS solid interpolated strips (see
  * near lerp_rgb below) -- solid strips are the ONLY implementation; both
  * vg_lite gradient APIs were investigated and ruled out:
@@ -81,14 +101,16 @@ static uint32_t s_err = 0;
  * buffer BEFORE returning. So the arena is safe to reuse the instant the
  * PRECEDING vg_lite_draw() call returns --
  * draw_fader_clipped() resets s_used to 0 on entry (see there), and the true
- * peak is ONE fader's shapes, worst case 694 non-band words at 33 ticks:
+ * peak is ONE fader's shapes, worst case 681 non-band words at 33 ticks:
  * panel/center/groove/two gloss rects ~14 words each, rod/shadow/base ~45
- * words each, border ring ~58 words, ticks up to ~431 words (33 emit_rects,
- * worst case not coalesced) -- PLUS the two cap bands, each now drawn as
- * FD_GRAD_STRIPS solid strips instead of one gradient-filled rect apiece
- * (see the arena arithmetic near lerp_rgb below): 694 + 28 * FD_GRAD_STRIPS
- * words, 918 at the default FD_GRAD_STRIPS=8 -- comfortably inside 2048 with
- * margin. Overflow is still COUNTED
+ * words each, border PLATE ~45 words (a rounded rect, same shape as base --
+ * see the winding note in the file header for why this replaced a 58-word
+ * nested-contour ring), ticks up to ~431 words (33 emit_rects, worst case
+ * not coalesced) -- PLUS the two cap bands, each now drawn as FD_GRAD_STRIPS
+ * solid strips instead of one gradient-filled rect apiece (see the arena
+ * arithmetic near lerp_rgb below): 681 + 28 * FD_GRAD_STRIPS words, 905 at
+ * the default FD_GRAD_STRIPS=8 -- comfortably inside 2048 with margin.
+ * Overflow is still COUNTED
  * and REFUSED (finish_path() returns false; a truncated path set is a wrong
  * picture that still draws -- worse here, since it is exactly what hangs
  * the Vivante front end while every call still reports SUCCESS). The
@@ -140,23 +162,6 @@ static void emit_round_rect(float x, float y, float w, float h, float r)
                         emit(fx(x + r));         emit(fx(y));
     emit(VLC_OP_CLOSE);
 }
-/* border ring: outer rounded contour + reversed inner sharp contour in one
- * path -- non-zero winding makes the donut, exactly like the rotary's
- * emit_ring. The two contours never overlap, so winding is 1 everywhere. */
-static void emit_border_ring(float x, float y, float w, float h, float r,
-                             float bw)
-{
-    emit_round_rect(x, y, w, h, r);
-    /* inner, counter-clockwise (reversed) */
-    const float ix = x + bw, iy = y + bw, iw = w - 2.0f * bw,
-                ih = h - 2.0f * bw;
-    emit(VLC_OP_MOVE); emit(fx(ix));      emit(fx(iy));
-    emit(VLC_OP_LINE); emit(fx(ix));      emit(fx(iy + ih));
-    emit(VLC_OP_LINE); emit(fx(ix + iw)); emit(fx(iy + ih));
-    emit(VLC_OP_LINE); emit(fx(ix + iw)); emit(fx(iy));
-    emit(VLC_OP_CLOSE);
-}
-
 /* Returns false when the path was truncated by the arena (see FD_ARENA_WORDS
  * above); the caller must not draw in that case. A truncated path has no
  * VLC_OP_END and is a WRONG PICTURE THAT STILL DRAWS -- worse here than
@@ -225,20 +230,20 @@ static uint32_t lerp_rgb(uint32_t c0, uint32_t c1, float t)
     return (r << 16) | (g << 8) | b;
 }
 
-/* Arena arithmetic -- see FD_ARENA_WORDS above for the 694-word baseline of
+/* Arena arithmetic -- see FD_ARENA_WORDS above for the 681-word baseline of
  * a full draw_fader_clipped() call excluding the cap bands. The two bands
  * add 2 * FD_GRAD_STRIPS strip rects at 14 words each (an emit_rect contour
  * is 13 words -- MOVE+2, three LINEs at 3 words each, CLOSE -- plus
  * finish_path's own VLC_OP_END), each its own finish_path()/vg_lite_draw()
  * call since each strip needs its own colour. Worst case:
- * 694 + 28 * FD_GRAD_STRIPS words. At the default FD_GRAD_STRIPS=8:
- * 694 + 224 = 918, comfortably inside FD_ARENA_WORDS (2048, ~55% margin);
+ * 681 + 28 * FD_GRAD_STRIPS words. At the default FD_GRAD_STRIPS=8:
+ * 681 + 224 = 905, comfortably inside FD_ARENA_WORDS (2048, ~56% margin);
  * FD_GRAD_STRIPS could rise to 48 before 2048 is exceeded, well past the
  * documented headroom of 16. Asserted, not just stated, so a future N this
  * arena can't hold fails to compile instead of silently truncating
  * (finish_path()'s overflow guard still catches it at runtime either way,
  * but a build-time check is cheaper than a bench boot). */
-static_assert(694 + 28 * FD_GRAD_STRIPS <= FD_ARENA_WORDS,
+static_assert(681 + 28 * FD_GRAD_STRIPS <= FD_ARENA_WORDS,
              "FD_GRAD_STRIPS too large for FD_ARENA_WORDS");
 
 /* ---- one-composite-per-pixel machinery (the rotary's, verbatim shape) ---
@@ -382,16 +387,34 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
                                  abgr_a(pal->center, 0xFFu)));
     }
 
-    /* cap: shadow, base, band strips x 2*FD_GRAD_STRIPS, groove, gloss x2,
-     * border ring */
+    /* cap: shadow, border plate, base, band strips x 2*FD_GRAD_STRIPS,
+     * groove (inset), gloss x2. */
     start = s_used; emit_round_rect(6.0f, cy + 2.5f, 88.0f, ch, 2.0f);
     if (finish_path(&p, start, 6.0f, cy, 94.0f, cy + ch + 3.0f))
         GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(0x1B1F22u, 115u)));
 
+    /* ★ border PLATE, not a stroked ring: a plain filled rounded rect drawn
+     * UNDER everything else, with the base/bands/groove inset by bw so the
+     * border shows as a margin. This replaces a nested outer-rounded +
+     * reversed-inner two-subpath ring that relied on non-zero winding to cut
+     * the hole -- on GC355 silicon that geometry rendered the WHOLE CAP
+     * SOLID in this same border colour, with a full-framebuffer checksum
+     * that differed on every one of 7 boots across two builds and
+     * fd_gpu_err=0 throughout (2026-08-29). See the file header for the
+     * full account and the winding rule this file now follows; the rotary's
+     * emit_track comment records the same hardware hostility to overlapping
+     * subpaths. */
     start = s_used; emit_round_rect(4.0f, cy, 88.0f, ch, 2.0f);
     if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
+        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(0x20262Au, 0xFFu)));
+
+    start = s_used; emit_round_rect(4.0f + bw, cy + bw, 88.0f - 2.0f * bw,
+                                    ch - 2.0f * bw, 2.0f);
+    if (finish_path(&p, start, 4.0f + bw, cy + bw, 92.0f - bw, cy + ch - bw))
         GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(pal->cap_mid, 0xFFu)));
@@ -419,8 +442,10 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
         }
     }
 
-    start = s_used; emit_rect(4.0f, cy + 0.43f * ch, 88.0f, 0.14f * ch);
-    if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
+    /* groove: inset to stay inside the border plate, not full cap width. */
+    start = s_used; emit_rect(4.0f + bw, cy + 0.43f * ch, 88.0f - 2.0f * bw,
+                              0.14f * ch);
+    if (finish_path(&p, start, 4.0f + bw, cy, 92.0f - bw, cy + ch))
         GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(0x20262Au, 0xFFu)));
@@ -434,12 +459,6 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
                                  (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                                  abgr_a(0xFFFFFFu, pal->gloss_opa)));
     }
-
-    start = s_used; emit_border_ring(4.0f, cy, 88.0f, ch, 2.0f, bw);
-    if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
-        GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                             abgr_a(0x20262Au, 0xFFu)));
 }
 
 /* One composite pass over every pending instance, into *s_cur_target. */
