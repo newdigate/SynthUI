@@ -17,12 +17,23 @@
  * unlike the rotary's fixed geometry, tick spacing here varies with vh and
  * travel and coincides at travel=0, so coalescing -- not spacing -- is what
  * keeps winding at 1.
- * The cap gradient uses cached vg_lite_linear_gradient_t ramps (one per
+ * The cap gradient uses cached vg_lite_ext_linear_gradient_t ramps (one per
  * band per palette state, built lazily) with a per-frame gradient matrix;
  * ramps are never rebuilt per frame (the NEW-12 per-frame-construction
- * lesson). No blits, so the 64-byte source-stride rule does not apply.
- * No D-cache maintenance, deliberately: the imxrt1176 core never enables
- * the D-cache. */
+ * lesson). The EXT API (vg_lite_draw_linear_grad) is used deliberately, NOT
+ * the legacy vg_lite_draw_grad -- that call is the GC255 image-ramp API;
+ * neither NXP's own vglite_layer example nor LVGL's vg_lite backend ever
+ * exercises it on a GC355 (both gate on g_chip_id/gcFEATURE_BIT_VG_LINEAR_
+ * GRADIENT_EXT and route here instead), which is what silently produced
+ * solid-black cap bands and a per-boot-varying checksum on real silicon
+ * while every vg_lite_* call kept returning VG_LITE_SUCCESS: vg_lite_set_
+ * grad cannot report a rejected ramp, so the legacy path substitutes an
+ * implicit opaque-black->white ramp with no error to see. A compile-time
+ * fallback (-DFD_GPU_GRAD_STRIPS=N, see near s_grads below) draws each band
+ * as N solid interpolated strips through the ordinary emit_rect/vg_lite_draw
+ * path instead, for if the EXT path ever needs its own escape hatch. No
+ * blits, so the 64-byte source-stride rule does not apply. No D-cache
+ * maintenance, deliberately: the imxrt1176 core never enables the D-cache. */
 #include "synthui_fader_gpu.h"
 #include "../synthui_fader_private.h"
 #include <math.h>
@@ -53,9 +64,9 @@ static uint32_t s_err = 0;
  * push_data() (vg_lite_path.c ~3291, taken because vg_lite_init_path() never
  * sets VLM_PATH_GET_UPLOAD_BIT) memcpys the path words into the command
  * buffer BEFORE returning. So the arena is safe to reuse the instant the
- * PRECEDING vg_lite_draw()/vg_lite_draw_grad() call returns -- draw_fader_
- * clipped() resets s_used to 0 on entry (see there), and the true peak is
- * ONE fader's shapes, worst case ~722 words at 33 ticks: panel/center/one
+ * PRECEDING vg_lite_draw()/vg_lite_draw_linear_grad() call returns --
+ * draw_fader_clipped() resets s_used to 0 on entry (see there), and the true
+ * peak is ONE fader's shapes, worst case ~722 words at 33 ticks: panel/center/one
  * grad band/groove/one gloss rect ~14 words each, rod/shadow/base ~45 words
  * each, border ring ~58 words, ticks up to ~431 words (33 emit_rects, worst
  * case not coalesced) -- comfortably inside 2048 with margin for the
@@ -167,57 +178,120 @@ static uint32_t abgr_a(uint32_t hex, uint32_t a)
            | ((hex >> 16) & 0xFFu);
 }
 
-/* The gradient RAMP is an IMAGE word (VG_LITE_BGRA8888 = bytes B,G,R,A =
- * the little-endian word 0xAARRGGBB), NOT a vg_lite_color_t (ABGR). LVGL
- * swaps R/B for exactly this reason before packing through its own ABGR
- * packer (lv_vg_lite_grad.c: `lv_color_make(c->blue, c->green, c->red)`,
- * verified against that source -- the double swap nets ARGB). Getting this
- * wrong is near-invisible on grey caps (the near-neutral colors here differ
- * by only Delta 1-7) and wrong on any themed colour, which is exactly why
- * it must be fixed now rather than baked into a GPU golden as "correct". */
-static uint32_t argb_a(uint32_t hex, uint32_t a)
+/* ---- gradient strategy: EXT linear gradient (default) or solid strips ---
+ * Default (FD_GPU_GRAD_STRIPS undefined): vg_lite_draw_linear_grad, the
+ * gcFEATURE_VG_LINEAR_GRADIENT_EXT API both NXP's own vglite_layer example
+ * and LVGL's vg_lite backend route a GC355 through (see the file header).
+ * Its ramp is a vg_lite_color_ramp_t array of straight (non-packed) float
+ * R/G/B/A components in [0,1] -- unlike the legacy vg_lite_linear_gradient_t
+ * image ramp, there is no packed word and therefore no byte-order to get
+ * wrong decoding this file's 0xRRGGBB hex constants into it; see ramp_set
+ * below.
+ * -DFD_GPU_GRAD_STRIPS=N (N >= 2): escape hatch for if the EXT path ever
+ * needs its own bench-side workaround -- draws each band as N solid
+ * horizontal strips (linearly RGB-interpolated between the band's two
+ * colours, strip i at (i+0.5)/N) through the SAME emit_rect + finish_path +
+ * vg_lite_draw machinery as every other solid shape in this file, which is
+ * proven correct on this hardware (only the gradient calls were ever
+ * implicated). Costs N draws per band instead of 1; FD_ARENA_WORDS is
+ * asserted (below) to cover it up to N=16 with margin. */
+
+/* vg_lite_color_ramp_t stop/color for the EXT ramp -- straight floats, full
+ * opacity (this widget's bands are never translucent). */
+#ifndef FD_GPU_GRAD_STRIPS
+static void ramp_set(vg_lite_color_ramp_t *r, float stop, uint32_t hex)
 {
-    return (a << 24) | (hex & 0x00FFFFFFu);
+    r->stop  = stop;
+    r->red   = (float)((hex >> 16) & 0xFFu) / 255.0f;
+    r->green = (float)((hex >> 8)  & 0xFFu) / 255.0f;
+    r->blue  = (float)(hex & 0xFFu) / 255.0f;
+    r->alpha = 1.0f;
 }
 
 /* ---- cached gradient ramps: one per band per palette state --------------
- * vg_lite_init_grad allocates the 256x1 ramp image from the vg pool ONCE;
- * only the grad MATRIX changes per frame (the ramp must not be rebuilt per
- * frame -- the NEW-12 lesson). Key: band 0 = capTop->capMid, band 1 =
+ * The ramp's line parameters are the CANONICAL unit vector (0,0)->(0,1) --
+ * position- and size-independent, so ONE cached object serves every frame
+ * and every fader instance for this (band, palette-state); only the grad
+ * MATRIX changes per frame (the ramp itself must not be rebuilt per frame --
+ * the NEW-12 lesson). draw_fader_clipped() maps the canonical line to the
+ * actual band's screen position/height with translate+scale on a COPY of
+ * the fader matrix (see the band loop below) -- the EXT-API equivalent of
+ * the legacy image-ramp trick of translate+rotate(90)+scale(h/256), minus
+ * the rotate (the canonical line already points down) and minus the /256
+ * (EXT takes a literal line length via grad_param, not a normalized
+ * 256-texel ramp index). Key: band 0 = capTop->capMid, band 1 =
  * capMid->capLow; state index 0 idle / 1 active / 2 disabled. */
-static vg_lite_linear_gradient_t s_grads[2][3];
+static vg_lite_ext_linear_gradient_t s_grads[2][3];
 static bool s_grad_ready[2][3];
 
-static vg_lite_linear_gradient_t *grad_get(int band, int stidx,
-                                           uint32_t c_top, uint32_t c_bot)
+static vg_lite_ext_linear_gradient_t *grad_get(int band, int stidx,
+                                               uint32_t c_top, uint32_t c_bot)
 {
     if (!s_grad_ready[band][stidx]) {
-        vg_lite_linear_gradient_t *g = &s_grads[band][stidx];
+        vg_lite_ext_linear_gradient_t *g = &s_grads[band][stidx];
         memset(g, 0, sizeof(*g));
-        if (vg_lite_init_grad(g) != VG_LITE_SUCCESS) { s_err++; return NULL; }
-        /* vg_lite_uint32_t is `unsigned int`; on this target's <stdint.h>
-         * uint32_t is `long unsigned int` -- same width, different type, so
-         * C++ requires the exact type here rather than relying on the
-         * build's -fpermissive to downgrade the mismatch to a warning. */
-        vg_lite_uint32_t cols[2] = { argb_a(c_top, 0xFFu), argb_a(c_bot, 0xFFu) };
-        vg_lite_uint32_t stops[2] = { 0, 255 };
+        vg_lite_color_ramp_t ramp[2];
+        ramp_set(&ramp[0], 0.0f, c_top);
+        ramp_set(&ramp[1], 1.0f, c_bot);
+        const vg_lite_linear_gradient_parameter_t line =
+            { 0.0f, 0.0f, 0.0f, 1.0f };
+        /* pre_mult=1 and PAD spread match LVGL's lv_vg_lite_grad.c
+         * linear_ext_grad_create() exactly; PAD is also the closest EXT
+         * equivalent of the legacy ramp's implicit tail-clamp (its texels
+         * past stop 255 held the last colour). pre_mult is a no-op here
+         * either way since every stop above is alpha=1.0. */
+        const bool ok =
+            vg_lite_set_linear_grad(g, 2, ramp, line,
+                                    VG_LITE_GRADIENT_SPREAD_PAD, 1)
+                == VG_LITE_SUCCESS
+            && vg_lite_update_linear_grad(g) == VG_LITE_SUCCESS;
         /* Only cache as ready when BOTH calls succeeded -- caching a broken
          * ramp on a failed set/update would draw a stale or garbage ramp
-         * forever while counting the error exactly once. */
-        const bool ok = vg_lite_set_grad(g, 2, cols, stops) == VG_LITE_SUCCESS
-                      && vg_lite_update_grad(g) == VG_LITE_SUCCESS;
-        /* vg_lite_clear_grad frees grad->image if its handle is set --
-         * without it, the next frame's memset wipes the handle and leaks
-         * the 4 KB ramp allocation per band per frame. Not reachable with
-         * this driver (both calls only ever return SUCCESS here), but the
-         * cleanup is free and correct either way. init_grad's own failure
-         * above needs no such cleanup -- nothing was allocated on that
-         * path. */
-        if (!ok) { s_err++; vg_lite_clear_grad(g); return NULL; }
+         * forever while counting the error exactly once. vg_lite_clear_
+         * linear_grad frees grad->image if its handle is set -- without it,
+         * the next frame's memset wipes the handle and leaks the backing
+         * ramp image: VLC_GRADIENT_BUFFER_WIDTH x 1 = 1024x1 (4 KB, not the
+         * 256x1/1 KB this comment used to claim before the ext-API switch --
+         * vg_lite.h:101) per band per frame. */
+        if (!ok) { s_err++; vg_lite_clear_linear_grad(g); return NULL; }
         s_grad_ready[band][stidx] = true;
     }
     return &s_grads[band][stidx];
 }
+#else /* FD_GPU_GRAD_STRIPS */
+#if FD_GPU_GRAD_STRIPS < 2
+#error "FD_GPU_GRAD_STRIPS must be >= 2"
+#endif
+/* Each strip's fill colour is built with abgr_a() (defined above), the same
+ * packer every solid shape in this file uses. */
+static uint32_t lerp_rgb(uint32_t c0, uint32_t c1, float t)
+{
+    const int r0 = (int)((c0 >> 16) & 0xFFu), g0 = (int)((c0 >> 8) & 0xFFu),
+              b0 = (int)(c0 & 0xFFu);
+    const int r1 = (int)((c1 >> 16) & 0xFFu), g1 = (int)((c1 >> 8) & 0xFFu),
+              b1 = (int)(c1 & 0xFFu);
+    const uint32_t r = (uint32_t)lroundf((float)r0 + (float)(r1 - r0) * t);
+    const uint32_t g = (uint32_t)lroundf((float)g0 + (float)(g1 - g0) * t);
+    const uint32_t b = (uint32_t)lroundf((float)b0 + (float)(b1 - b0) * t);
+    return (r << 16) | (g << 8) | b;
+}
+
+/* Arena arithmetic for the strips fallback -- see FD_ARENA_WORDS above for
+ * the 722-word derivation of a full draw_fader_clipped() call, of which the
+ * two ext-gradient band rects contribute 28 words (2 rects * 14 words: an
+ * emit_rect contour is 13 words -- MOVE+2, three LINEs at 3 words each,
+ * CLOSE -- plus finish_path's own VLC_OP_END). Replacing those 2 rects with
+ * 2*FD_GPU_GRAD_STRIPS strip rects (same 14 words each: each strip is its
+ * own finish_path()/vg_lite_draw() call) gives a worst case of
+ * (722 - 28) + 28*FD_GPU_GRAD_STRIPS = 694 + 28*FD_GPU_GRAD_STRIPS words.
+ * At N=16: 694 + 448 = 1142, comfortably inside FD_ARENA_WORDS (2048, ~44%
+ * margin); N could rise to 48 before 2048 is exceeded. Asserted, not just
+ * stated, so a future N this arena can't hold fails to compile instead of
+ * silently truncating (finish_path()'s overflow guard still catches it at
+ * runtime either way, but a build-time check is cheaper than a bench boot). */
+static_assert(694 + 28 * FD_GPU_GRAD_STRIPS <= FD_ARENA_WORDS,
+             "FD_GPU_GRAD_STRIPS too large for FD_ARENA_WORDS");
+#endif /* FD_GPU_GRAD_STRIPS */
 
 /* ---- one-composite-per-pixel machinery (the rotary's, verbatim shape) ---
  * LVGL only guarantees a damaged pixel is rendered AT LEAST once; two
@@ -373,34 +447,59 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(pal->cap_mid, 0xFFu)));
 
-    /* gradient bands, inset inside the border; the grad matrix maps the
-     * 256x1 ramp along +x, so: fader matrix, then translate to the band
-     * origin (x16 fixed units), rotate 90 (ramp runs down), scale the 256
-     * ramp length onto the band height. VERIFY against vg_lite.h and the
-     * first silicon eyeball -- orientation is the one blind spot (gpu spec
-     * section 10); the fallback is N solid interpolated strips. */
+    /* gradient bands, inset inside the border. */
     const struct { float y0, h; int band; uint32_t top, bot; } bands[2] = {
         { cy + bw,          0.46f * ch - bw, 0, pal->cap_top, pal->cap_mid },
         { cy + 0.46f * ch,  0.54f * ch - bw, 1, pal->cap_mid, pal->cap_low },
     };
+#ifndef FD_GPU_GRAD_STRIPS
+    /* EXT linear gradient: the grad's own matrix is a COPY of the fader
+     * matrix with translate+scale composed on top, mapping the ramp's
+     * canonical (0,0)->(0,1) line onto this band's actual screen position
+     * and height (see grad_get's comment) -- no rotate needed (the line
+     * already points down) and no /256 (the length is literal, not a
+     * normalized ramp-texel index). The PATH's own matrix (passed to
+     * vg_lite_draw_linear_grad below) stays the plain fader matrix c->m,
+     * same as every other shape in this function -- only the gradient's
+     * OWN sampling matrix gets the extra translate+scale. */
     for (int b = 0; b < 2; b++) {
-        vg_lite_linear_gradient_t *gr = grad_get(bands[b].band, c->stidx,
-                                                 bands[b].top, bands[b].bot);
+        vg_lite_ext_linear_gradient_t *gr = grad_get(bands[b].band, c->stidx,
+                                                      bands[b].top, bands[b].bot);
         if (gr == NULL) continue;
         start = s_used;
         emit_rect(4.0f + bw, bands[b].y0, 88.0f - 2.0f * bw, bands[b].h);
         if (!finish_path(&p, start, 4.0f + bw, bands[b].y0,
                          92.0f - bw, bands[b].y0 + bands[b].h))
             continue;
-        vg_lite_matrix_t *gm = vg_lite_get_grad_matrix(gr);
+        vg_lite_matrix_t *gm = vg_lite_get_linear_grad_matrix(gr);
         *gm = *(vg_lite_matrix_t *)c->m;
         vg_lite_translate((4.0f + bw) * FD_FIX, bands[b].y0 * FD_FIX, gm);
-        vg_lite_rotate(90.0f, gm);
-        vg_lite_scale(bands[b].h * FD_FIX / 256.0f, 1.0f, gm);
-        GPU_TRY(vg_lite_draw_grad(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                                  (vg_lite_matrix_t *)c->m, gr,
-                                  VG_LITE_BLEND_SRC_OVER));
+        vg_lite_scale(1.0f, bands[b].h * FD_FIX, gm);
+        GPU_TRY(vg_lite_draw_linear_grad(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                         (vg_lite_matrix_t *)c->m, gr,
+                                         0, VG_LITE_BLEND_SRC_OVER,
+                                         VG_LITE_FILTER_LINEAR));
     }
+#else
+    /* Escape hatch: N solid horizontal strips per band, linearly
+     * RGB-interpolated, through the ordinary solid-fill draw site. */
+    for (int b = 0; b < 2; b++) {
+        for (int s = 0; s < FD_GPU_GRAD_STRIPS; s++) {
+            const float t = ((float)s + 0.5f) / (float)FD_GPU_GRAD_STRIPS;
+            const uint32_t col = lerp_rgb(bands[b].top, bands[b].bot, t);
+            const float sy0 = bands[b].y0
+                             + bands[b].h * (float)s / (float)FD_GPU_GRAD_STRIPS;
+            const float sy1 = bands[b].y0
+                             + bands[b].h * (float)(s + 1) / (float)FD_GPU_GRAD_STRIPS;
+            start = s_used;
+            emit_rect(4.0f + bw, sy0, 88.0f - 2.0f * bw, sy1 - sy0);
+            if (finish_path(&p, start, 4.0f + bw, sy0, 92.0f - bw, sy1))
+                GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                     (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                                     abgr_a(col, 0xFFu)));
+        }
+    }
+#endif
 
     start = s_used; emit_rect(4.0f, cy + 0.43f * ch, 88.0f, 0.14f * ch);
     if (finish_path(&p, start, 4.0f, cy, 92.0f, cy + ch))
@@ -491,7 +590,9 @@ bool synthui_fader_gpu_begin_deferred(int32_t w, int32_t h,
     s_def_w = w; s_def_h = h; s_def_stride = stride_bytes;
     s_def_n = 0;
     s_used = 0; s_overflow = false;
+#ifndef FD_GPU_GRAD_STRIPS
     memset(s_grad_ready, 0, sizeof(s_grad_ready));
+#endif
     synthui_fader_gpu_enabled = true;
     s_begun = true;
     return true;
