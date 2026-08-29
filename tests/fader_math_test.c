@@ -26,9 +26,11 @@ int main(void)
     assert(approx_eq(synthui_fader_drag(0.9f,  500.0f, 160.0f), 1.0f));
     assert(approx_eq(synthui_fader_drag(0.1f, -500.0f, 160.0f), 0.0f));
 
-    /* ANCHOR-TOTAL mapping (spec section 8): overshoot past the rail and a
-     * partial return lands where the POSITION says, not where an
-     * accumulator would -- this case distinguishes the two designs */
+    /* overshoot past the rail, then a smaller displacement from the SAME
+     * anchor: verifies clamp-then-remap arithmetic under the anchor-fixed
+     * calling convention (spec section 8).  The accumulator-vs-total
+     * behavioural contrast lives at the widget layer (anchor set only on
+     * PRESSED) and cannot be expressed against this pure signature. */
     assert(approx_eq(synthui_fader_drag(0.0f, 200.0f, 160.0f), 1.0f));
     assert(approx_eq(synthui_fader_drag(0.0f,  80.0f, 160.0f), 0.5f));
 
