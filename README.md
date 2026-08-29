@@ -5,9 +5,10 @@ knobs, faders, lamps, LED buttons, level meters, piano keys, seven-segment
 displays, toggles — for the synth firmware in the rt1176-evkb tree (acid bass
 voice, transport, step sequencer).
 
-Status: reference material plus the first widget (`src/synthui_knob`):
-renders all four modes and takes vertical-drag touch input (200 px = full
-sweep; drag math is host-tested in `tests/`, run via `tests/run.sh`).
+Status: reference material plus three widgets — `src/synthui_rotary_knob`
+(two-engine: LVGL-sw + optional GC355 compositor in `src/vglite/`),
+`src/synthui_step`, and `src/synthui_fader` (LVGL-sw, delta rendering).
+Drag math is host-tested in `tests/`, run via `tests/run.sh`.
 
 ## Layout
 
@@ -32,7 +33,7 @@ reappearing `reference/rebirth/` is a deliberate decision, not a restoration.
   community mod art, rights unclear — which is why it is not in this repo.
 - Clean-room vector rebuilds from *written descriptions* are the intended
   path — the same firewall discipline as the rt1176-evkb tree's license audit.
-  `src/synthui_knob` is built that way and derives from the DC set, not from
+  the `src/` widgets are built that way and derive from the DC set, not from
   the ReBirth material.
 - The MIT LICENSE covers this repo's own content: the DC component set,
   `support.js`, and all `src/` code.
