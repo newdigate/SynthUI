@@ -21,10 +21,12 @@ typedef struct synthui_fader_t {
     uint32_t panel;
     uint8_t ticks;
     bool center;
-    /* Set by DRAW_MAIN when the GPU hook is enabled: "my ground was painted
-     * this frame, my content still needs compositing". Cleared by the
-     * compositor. Never set for hidden/other-screen objects, because
-     * DRAW_MAIN does not run for them (the rotary's contract). */
+    /* Set by DRAW_MAIN when the GPU hook is enabled: "my draw was SKIPPED
+     * this frame; I still need full compositing" -- nothing was painted
+     * for this instance, so the compositor must cover the whole footprint
+     * (see the fd_draw gate comment). Cleared by the compositor. Never set
+     * for hidden/other-screen objects, because DRAW_MAIN does not run for
+     * them (the rotary's contract). */
     bool gpu_pending;
     struct synthui_fader_t *prev, *next;   /* instance registry */
 } synthui_fader_t;
@@ -32,7 +34,11 @@ typedef struct synthui_fader_t {
 /* Registry of live instances (constructor links, destructor unlinks) and the
  * one flag the GPU TU flips on successful synthui_fader_gpu_begin_deferred().
  * Both are defined in the core so the core never references GPU symbols; a
- * build without src/vglite/ simply leaves the flag false forever. */
+ * build without src/vglite/ simply leaves the flag false forever.
+ * Invariant the compositor relies on: no instance may be created or
+ * destroyed while a compose pass is walking this list. True today because
+ * LVGL is single-threaded and compositing runs inside the render/flip
+ * path, but nothing enforces it. */
 extern synthui_fader_t *synthui_fader_list;
 extern bool synthui_fader_gpu_enabled;
 

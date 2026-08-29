@@ -294,9 +294,15 @@ static void fd_draw(synthui_fader_t *f, lv_layer_t *layer)
 {
     /* GPU mode: the compositor draws EVERYTHING (panel..cap) per rendered
      * area -- removing the per-widget draw-task churn is the entire point
-     * (the sw floor diagnosis, gpu spec section 1). DRAW_MAIN only marks
-     * the instance; LVGL paints the screen ground beneath. sw mode is
-     * untouched, so every QEMU golden and the sw delta guards stand. */
+     * (the sw floor diagnosis, gpu spec section 1). DRAW_MAIN paints
+     * NOTHING here; it only marks the instance.
+     * ★ Unlike the rotary -- whose disc well leaves its bounding-box
+     * corners as parent background -- this widget's panel is an OPAQUE
+     * rect over its FULL bounds, so there is no ground to fall back on:
+     * the compositor owns every pixel of the footprint, every frame it is
+     * marked. Anything it fails to cover shows the previous frame's
+     * content, not a background. sw mode is untouched, so every QEMU
+     * golden and the sw delta guards stand. */
     if (synthui_fader_gpu_enabled) { f->gpu_pending = true; return; }
 
     lv_area_t c; synthui_fader_geom_t g;
