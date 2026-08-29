@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 110px;display:flex;flex-direction:column;gap:56px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Index · vg_lite · RB-338 rebuild</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Ten components, one panel language</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Every sprite in the archive collapses into a parameterised primitive. Each card below is the live component, not a screenshot — click through to its sheet for states, sizes and the vector reasoning behind it.</p>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #dcdbd0;padding-bottom:10px">
+      <h2 style="margin:0;font-size:15px;font-weight:600;letter-spacing:0.02em">Primitives</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8">9 files · drop-in, prop-driven</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(292px,1fr));gap:18px">
+
+      <a href="RotaryKnob.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:22px">
+          <dc-import name="RotaryKnob" variant="notch" theme="dark" angle="{{ -38 }}" size="{{ 112 }}" accent="#ffd24a" hint-size="112px,112px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">RotaryKnob</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Five cap variants, endless or bounded, light and dark bodies. <span style="color:#8a8da8">Knob Sheet v2</span></div>
+        </div>
+      </a>
+
+      <a href="PanelButton.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:10px">
+          <dc-import name="PanelButton" glyph="rewind" accent="blue" on="{{ false }}" w="{{ 72 }}" h="{{ 58 }}" hint-size="72px,58px"></dc-import>
+          <dc-import name="PanelButton" glyph="play" accent="green" on="{{ true }}" w="{{ 72 }}" h="{{ 58 }}" hint-size="72px,58px"></dc-import>
+          <dc-import name="PanelButton" glyph="record" accent="red" on="{{ false }}" w="{{ 72 }}" h="{{ 58 }}" hint-size="72px,58px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">PanelButton</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">One bevelled body, ten glyphs, six accents. Transport, spinners, checkboxes. <span style="color:#8a8da8">Panel Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="Lamp.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:20px">
+          <dc-import name="Lamp" shape="round" color="#f078b0" on="{{ true }}" w="{{ 44 }}" h="{{ 44 }}" hint-size="44px,44px"></dc-import>
+          <dc-import name="Lamp" shape="pill" color="#48e070" on="{{ true }}" w="{{ 30 }}" h="{{ 62 }}" hint-size="30px,62px"></dc-import>
+          <dc-import name="Lamp" shape="bar" color="#f0a030" on="{{ false }}" w="{{ 62 }}" h="{{ 26 }}" hint-size="62px,26px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">Lamp</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Round, pill or bar indicator. State is luminance only — no geometry change. <span style="color:#8a8da8">Panel Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="LedButton.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:14px">
+          <dc-import name="LedButton" lit="{{ true }}" color="red" size="{{ 74 }}" hint-size="74px,74px"></dc-import>
+          <dc-import name="LedButton" lit="{{ false }}" cue="{{ true }}" color="amber" size="{{ 74 }}" hint-size="74px,74px"></dc-import>
+          <dc-import name="LedButton" lit="{{ false }}" color="green" size="{{ 74 }}" hint-size="74px,74px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">LedButton</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Sixteen-step pad: lit, pressed, cue, disabled, four colours. <span style="color:#8a8da8">Step Buttons Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="Fader.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:18px">
+          <dc-import name="Fader" value="{{ 0.72 }}" w="{{ 62 }}" h="{{ 166 }}" hint-size="62px,166px"></dc-import>
+          <dc-import name="Fader" value="{{ 0.34 }}" state="active" panel="#39434b" w="{{ 62 }}" h="{{ 166 }}" hint-size="62px,166px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">Fader</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Draggable channel slider with tick scale and centre-detent mode. <span style="color:#8a8da8">Fader Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="LevelMeter.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:16px">
+          <dc-import name="LevelMeter" value="{{ 0.62 }}" peak="{{ 0.8 }}" w="{{ 32 }}" h="{{ 162 }}" hint-size="32px,162px"></dc-import>
+          <dc-import name="LevelMeter" value="{{ 0.94 }}" peak="{{ 1 }}" clip="{{ true }}" w="{{ 32 }}" h="{{ 162 }}" hint-size="32px,162px"></dc-import>
+          <dc-import name="LevelMeter" value="{{ 0.28 }}" peak="{{ 0.5 }}" panel="#39434b" w="{{ 32 }}" h="{{ 162 }}" hint-size="32px,162px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">LevelMeter</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Segmented VU with held peak and clip flag; segment count is a prop. <span style="color:#8a8da8">Meter Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="SlideToggle.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+          <dc-import name="SlideToggle" value="{{ 0 }}" left="saw" right="square" w="{{ 138 }}" h="{{ 48 }}" hint-size="138px,48px"></dc-import>
+          <dc-import name="SlideToggle" value="{{ 2 }}" positions="{{ 4 }}" left="tri" right="pulse" panel="#39434b" w="{{ 138 }}" h="{{ 48 }}" hint-size="138px,48px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">SlideToggle</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Two- to four-position switch with waveform end glyphs. <span style="color:#8a8da8">Toggle Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="PianoKey.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;align-items:center;justify-content:center;gap:6px">
+          <dc-import name="PianoKey" type="white" w="{{ 46 }}" h="{{ 154 }}" hint-size="46px,154px"></dc-import>
+          <dc-import name="PianoKey" type="black" lit="{{ true }}" w="{{ 30 }}" h="{{ 100 }}" hint-size="30px,100px"></dc-import>
+          <dc-import name="PianoKey" type="white" pressed="{{ true }}" w="{{ 46 }}" h="{{ 154 }}" hint-size="46px,154px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">PianoKey</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">White and black key with a uniform velocity pad and lit state. <span style="color:#8a8da8">Keyboard Sheet</span></div>
+        </div>
+      </a>
+
+      <a href="SevenSegment.dc.html" style="display:flex;flex-direction:column;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden;color:inherit" style-hover="border-color:#b6b5a8">
+        <div style="background:#181830;height:186px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+          <dc-import name="SevenSegment" text="140.0" size="{{ 46 }}" accent="blue" hint-size="200px,54px"></dc-import>
+          <dc-import name="SevenSegment" text="A-07" size="{{ 34 }}" accent="amber" hint-size="150px,40px"></dc-import>
+        </div>
+        <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500">SevenSegment</div>
+          <div style="font-size:13.5px;line-height:1.45;color:#5b5e7a">Slanted numeric readout with ghost segments and four tube colours. <span style="color:#8a8da8">Display Sheet</span></div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <sc-if value="{{ bigPreviews }}" hint-placeholder-val="{{ true }}">
+  <section style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #dcdbd0;padding-bottom:10px">
+      <h2 style="margin:0;font-size:15px;font-weight:600;letter-spacing:0.02em">Screens</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8">3 files · click a row to expand</span>
+    </div>
+
+    <div ref="{{ wrapRef }}" style="display:flex;flex-direction:column;gap:16px">
+
+      <div style="background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px">
+          <div onClick="{{ toggleTracker }}" style="display:flex;align-items:baseline;gap:11px;cursor:pointer;flex:1;min-width:0" style-hover="opacity:0.72">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8;width:11px;flex:none">{{ markTracker }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;flex:none">Tracker</span>
+            <span style="font-size:13.5px;color:#5b5e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Eight-channel pattern grid, frozen cursor row, channel-quantised paging.</span>
+          </div>
+          <a href="Tracker.dc.html" style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">open →</a>
+        </div>
+        <sc-if value="{{ openTracker }}" hint-placeholder-val="{{ true }}">
+        <div style="overflow:hidden;background:#101018;border-top:1px solid #e6e5db;height:{{ hTracker }}px">
+          <div ref="{{ refTracker }}" style="width:1180px;transform:scale({{ scale }});transform-origin:top left;pointer-events:none">
+            <dc-import name="Tracker" style="width:1180px" hint-size="1180px,1270px"></dc-import>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+
+      <div style="background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px">
+          <div onClick="{{ toggleRoll }}" style="display:flex;align-items:baseline;gap:11px;cursor:pointer;flex:1;min-width:0" style-hover="opacity:0.72">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8;width:11px;flex:none">{{ markRoll }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;flex:none">Piano Roll</span>
+            <span style="font-size:13.5px;color:#5b5e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">88-lane roll with centre, page and free follow modes.</span>
+          </div>
+          <a href="Piano%20Roll.dc.html" style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">open →</a>
+        </div>
+        <sc-if value="{{ openRoll }}" hint-placeholder-val="{{ true }}">
+        <div style="overflow:hidden;background:#101018;border-top:1px solid #e6e5db;height:{{ hRoll }}px">
+          <div ref="{{ refRoll }}" style="width:1180px;transform:scale({{ scale }});transform-origin:top left;pointer-events:none">
+            <dc-import name="Piano Roll" style="width:1180px" hint-size="1180px,1191px"></dc-import>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+
+      <div style="background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px">
+          <div onClick="{{ toggleWave }}" style="display:flex;align-items:baseline;gap:11px;cursor:pointer;flex:1;min-width:0" style-hover="opacity:0.72">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8;width:11px;flex:none">{{ markWave }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;flex:none">Waveform</span>
+            <span style="font-size:13.5px;color:#5b5e7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Sample view with overview strip and playhead tracking.</span>
+          </div>
+          <a href="Waveform.dc.html" style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">open →</a>
+        </div>
+        <sc-if value="{{ openWave }}" hint-placeholder-val="{{ true }}">
+        <div style="overflow:hidden;background:#101018;border-top:1px solid #e6e5db;height:{{ hWave }}px">
+          <div ref="{{ refWave }}" style="width:1180px;transform:scale({{ scale }});transform-origin:top left;pointer-events:none">
+            <dc-import name="Waveform" style="width:1180px" hint-size="1180px,1161px"></dc-import>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+
+    </div>
+  </section>
+  </sc-if>
+
+  <sc-if value="{{ showSheets }}" hint-placeholder-val="{{ true }}">
+  <section style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #dcdbd0;padding-bottom:10px">
+      <h2 style="margin:0;font-size:15px;font-weight:600;letter-spacing:0.02em">Sheets &amp; explorations</h2>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8da8">states, sizes, rejected directions</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px">
+      <a href="Knob%20Sheet%20v2.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Knob Sheet v2</span>
+        <span style="font-size:12.5px;color:#6f7396">Cap variants, angles, states</span>
+      </a>
+      <a href="Panel%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Panel Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">Transport, lamps, switches</span>
+      </a>
+      <a href="Step%20Buttons%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Step Buttons Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">16-step row, cue and clear</span>
+      </a>
+      <a href="Fader%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Fader Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">Eight-channel mixer strip</span>
+      </a>
+      <a href="Meter%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Meter Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">Segments, peaks, clipping</span>
+      </a>
+      <a href="Toggle%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Toggle Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">2–4 positions, LFO glyphs</span>
+      </a>
+      <a href="Keyboard%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Keyboard Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">Octave assembly, pad zones</span>
+      </a>
+      <a href="Display%20Sheet.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Display Sheet</span>
+        <span style="font-size:12.5px;color:#6f7396">Tube colours, slant, ghosting</span>
+      </a>
+      <a href="Tracker%20Options.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Tracker Options</span>
+        <span style="font-size:12.5px;color:#6f7396">Three layout directions (1a chosen)</span>
+      </a>
+      <a href="Waveform%20Options.dc.html" style="display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:#fbfaf5;border:1px solid #e6e5db;border-radius:5px;color:inherit" style-hover="border-color:#b6b5a8">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Waveform Options</span>
+        <span style="font-size:12.5px;color:#6f7396">Overview and tracking studies</span>
+      </a>
+    </div>
+  </section>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1240},&quot;bigPreviews&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sections&quot;},&quot;showSheets&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sections&quot;}}">
+const H = { Tracker: 1270, Roll: 1191, Wave: 1161 };
+const KEYS = ['Tracker', 'Roll', 'Wave'];
+
+class Component extends DCLogic {
+  state = { w: 0, openTracker: true, openRoll: false, openWave: false, measured: {} };
+
+  measure(key, el) {
+    if (!el) { if (this.mo && this.mo[key]) { this.mo[key].disconnect(); delete this.mo[key]; } return; }
+    this.mo = this.mo || {};
+    const read = () => {
+      const h = el.scrollHeight;
+      if (h && h !== this.state.measured[key]) {
+        this.setState(s => ({ measured: Object.assign({}, s.measured, { [key]: h }) }));
+      }
+    };
+    if (!this.mo[key]) {
+      this.mo[key] = new ResizeObserver(read);
+      this.mo[key].observe(el);
+    }
+    read();
+  }
+
+  componentDidMount() {
+    if (!this.el) return;
+    this.ro = new ResizeObserver(() => {
+      const w = this.el.clientWidth;
+      if (w && w !== this.state.w) this.setState({ w });
+    });
+    this.ro.observe(this.el);
+    this.setState({ w: this.el.clientWidth });
+  }
+  componentWillUnmount() { if (this.ro) this.ro.disconnect(); }
+
+  toggle(key) { this.setState(s => ({ ['open' + key]: !s['open' + key] })); }
+
+  renderVals() {
+    const scale = this.state.w ? Math.floor((this.state.w / 1180) * 1000) / 1000 : 0.3;
+    const v = {
+      bigPreviews: this.props.bigPreviews ?? true,
+      showSheets: this.props.showSheets ?? true,
+      wrapRef: (el) => { this.el = el; },
+      scale,
+    };
+    for (const k of KEYS) {
+      const open = this.state['open' + k];
+      v['open' + k] = open;
+      v['mark' + k] = open ? '▾' : '▸';
+      v['h' + k] = Math.round((this.state.measured[k] || H[k]) * scale);
+      v['toggle' + k] = () => this.toggle(k);
+      v['ref' + k] = (el) => this.measure(k, el);
+    }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

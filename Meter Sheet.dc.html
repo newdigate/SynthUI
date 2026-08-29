@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · level meter · peak hold · clip latch</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">LED ladder that knows where it hurts</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Ten pills on a blue-grey plate, green to amber to red by position rather than by value. Every segment is drawn every frame either way — lit and unlit differ by a fill alpha and a stroke halo — so the meter costs the same at silence as at clip.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">3 rects per segment</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">peak hold · float</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">clip latches until reset</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#39434b;padding:34px 36px;display:flex;gap:38px;align-items:flex-start;flex-wrap:wrap">
+      <div style="display:flex;gap:12px;align-items:flex-start;background:#6d7a85;padding:14px 14px 12px;border-radius:4px">
+        <div style="display:flex;flex-direction:column;justify-content:space-between;height:236px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#e4eaec;text-align:right;letter-spacing:0.06em">
+          <span>CLIP</span><span>−6</span><span>−12</span><span>−24</span><span>−36</span>
+        </div>
+        <dc-import name="LevelMeter" value="{{ master }}" peak="{{ masterPeak }}" clip="{{ masterClip }}" segments="{{ 10 }}" w="{{ 40 }}" h="{{ 236 }}" onPress="{{ resetClip }}" hint-size="40px,236px"></dc-import>
+      </div>
+      <div style="display:flex;gap:9px;align-items:flex-start;background:#4d5862;padding:14px 12px;border-radius:4px">
+        <sc-for list="{{ channels }}" as="c" hint-placeholder-count="8">
+          <div style="display:flex;flex-direction:column;gap:9px;align-items:center">
+            <dc-import name="LevelMeter" value="{{ c.value }}" peak="{{ c.peak }}" clip="{{ c.clip }}" segments="{{ 10 }}" w="{{ 26 }}" h="{{ 190 }}" panel="#5b6570" onPress="{{ c.reset }}" hint-size="26px,190px"></dc-import>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#aab6bd">{{ c.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#aab6bd">peak dB</span>
+          <dc-import name="SevenSegment" text="{{ dbText }}" size="{{ 42 }}" accent="{{ dbAccent }}" hint-size="150px,46px"></dc-import>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <dc-import name="PanelButton" glyph="play" accent="green" on="{{ running }}" w="{{ 66 }}" h="{{ 52 }}" onPress="{{ onRun }}" hint-size="66px,52px"></dc-import>
+          <dc-import name="PanelButton" glyph="stop" accent="amber" on="{{ stopped }}" w="{{ 66 }}" h="{{ 52 }}" onPress="{{ onHalt }}" hint-size="66px,52px"></dc-import>
+          <dc-import name="LedButton" size="{{ 44 }}" lit="{{ anyClip }}" color="red" onPress="{{ resetAll }}" hint-size="44px,44px"></dc-import>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#aab6bd;max-width:26ch;line-height:1.7">click a meter to clear its latch · the red key clears all</div>
+      </div>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">signal is simulated · peak hold decays at 12 dB/s, clip holds until cleared</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · States</h2>
+      <span style="font-size:14px;color:#6f7396">Zone colour comes from segment position, never from the value.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="background:#39434b;padding:22px;display:flex;justify-content:center">
+            <dc-import name="LevelMeter" value="{{ s.value }}" peak="{{ s.peak }}" clip="{{ s.clip }}" segments="{{ 10 }}" w="{{ 40 }}" h="{{ 220 }}" hint-size="40px,220px"></dc-import>
+          </div>
+          <div style="padding:15px 17px 17px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Resolution &amp; size</h2>
+      <span style="font-size:14px;color:#6f7396">Segment count is a prop; the pill keeps a 0.7 fill of its pitch at every count.</span>
+    </div>
+    <div style="background:#39434b;border-radius:5px;padding:34px 36px;display:flex;gap:44px;align-items:flex-end;flex-wrap:wrap">
+      <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="LevelMeter" value="{{ 0.68 }}" peak="{{ 0.86 }}" segments="{{ z.n }}" w="{{ z.w }}" h="{{ z.h }}" hint-size="40px,200px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#aab6bd">{{ z.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Draw list</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="5">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b;max-width:62ch">Thirty draws for a ten-segment meter, all flat fills on one path uploaded once and translated down the ladder. At 60 fps a bank of eight is 240 draws a frame — comfortably inside budget, and the dirty rect is only the segments that changed zone.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Replaces</h2>
+      </div>
+      <div style="display:flex;gap:22px;align-items:flex-start">
+        <img src="crop-meter.png" alt="original level meter" style="width:120px;image-rendering:pixelated;border-radius:4px"></img>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+          <div>photographed plate · 114×218</div>
+          <div>10 segments · fixed scale art</div>
+          <div>labels baked into the panel</div>
+          <div style="color:#22243c;font-weight:500;margin-top:10px">vector · 3 rects × n</div>
+          <div style="color:#22243c;font-weight:500">any count · labels owned by the strip</div>
+        </div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: the pill shape with its bright centre bar, the dark unlit state that still shows its hue, and the green/amber/red zoning read off position. Dropped: the engraved scale — CLIP / −6 / −12 / −24 / −36 belongs to the channel strip, so a meter with 20 segments relabels without new art.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;segments&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:3,&quot;max&quot;:30,&quot;tsType&quot;:&quot;number&quot;}}">
+const NAMES = ['BD', 'SD', 'LT', 'MT', 'HT', 'RS', 'CP', 'CY'];
+
+class Component extends DCLogic {
+  state = {
+    running: true, t: 0,
+    v: NAMES.map(() => 0.3), pk: NAMES.map(() => 0.3), clip: NAMES.map(() => false),
+    mv: 0.4, mpk: 0.4, mclip: false,
+  };
+  componentDidMount() {
+    this.timer = setInterval(() => {
+      if (!this.state.running) return;
+      this.setState((s) => {
+        const t = s.t + 1;
+        const v = s.v.map((_, i) => {
+          const beat = (t + i * 3) % 16;
+          const hit = beat % (4 + (i % 3)) === 0;
+          // normal hits stay under the latch; one channel overshoots now and then
+          const over = hit && Math.random() < 0.012;
+          const base = hit ? (over ? 1.02 : 0.58 + Math.random() * 0.32) : Math.max(0.05, s.v[i] * 0.72);
+          return Math.min(1.05, base);
+        });
+        const pk = s.pk.map((p, i) => Math.max(v[i], p - 0.035));
+        const clip = s.clip.map((c, i) => c || v[i] > 0.99);
+        const mv = Math.min(1.05, v.reduce((a, b) => a + b, 0) / 6.6);
+        return { t, v, pk, clip, mv, mpk: Math.max(mv, s.mpk - 0.03), mclip: s.mclip || mv > 0.99 };
+      });
+    }, 130);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  db(v) {
+    if (v <= 0.02) return ' -oo';
+    const d = Math.round((v - 1) * 48);
+    return d >= 0 ? '  0.0' : (d > -10 ? ' ' : '') + '-' + Math.abs(d) + '.0';
+  }
+
+  renderVals() {
+    const s = this.state;
+    return {
+      master: Math.min(1, s.mv), masterPeak: Math.min(1, s.mpk), masterClip: s.mclip,
+      dbText: this.db(s.mpk), dbAccent: s.mclip ? 'red' : s.mpk > 0.85 ? 'amber' : 'cyan',
+      running: s.running, stopped: !s.running,
+      anyClip: s.mclip || s.clip.some(Boolean),
+      onRun: () => this.setState({ running: true }),
+      onHalt: () => this.setState({ running: false }),
+      resetClip: () => this.setState({ mclip: false, mpk: 0 }),
+      resetAll: () => this.setState({ mclip: false, mpk: 0, clip: NAMES.map(() => false), pk: NAMES.map(() => 0) }),
+      channels: NAMES.map((name, i) => ({
+        name, value: Math.min(1, s.v[i]), peak: Math.min(1, s.pk[i]), clip: s.clip[i],
+        reset: () => this.setState((p) => { const c = p.clip.slice(); c[i] = false; const pk = p.pk.slice(); pk[i] = 0; return { clip: c, pk }; }),
+      })),
+      states: [
+        { name: 'silence', value: 0, peak: -1, clip: false, note: 'All ten pills drawn dark — the ladder is always legible as a scale, never an empty slot.' },
+        { name: 'nominal', value: 0.6, peak: -1, clip: false, note: 'Green zone. Lit segments take a full fill plus a stroke halo at 34% α.' },
+        { name: 'peak hold', value: 0.55, peak: 0.85, clip: false, note: 'A single amber pill held above the level, halo dropped to 22% so it reads as a marker, not signal.' },
+        { name: 'hot', value: 0.93, peak: 0.95, clip: false, note: 'Into the amber and red band. Zone is positional, so the colours never chase the value.' },
+        { name: 'clipped', value: 0.7, peak: 1, clip: true, note: 'Top pill latches red and stays lit after the signal drops. Cleared by tap or by the reset key.' },
+      ],
+      sizes: [
+        { n: 6, w: 26, h: 120, label: '6 seg · 120' },
+        { n: 10, w: 32, h: 180, label: '10 seg · 180' },
+        { n: 14, w: 40, h: 230, label: '14 seg · 230' },
+        { n: 20, w: 46, h: 280, label: '20 seg · 280' },
+        { n: 28, w: 54, h: 320, label: '28 seg · 320' },
+      ],
+      drawList: [
+        { a: 'plate', b: 'rect, flat fill', c: 'static' },
+        { a: 'segment well', b: 'rounded rect r0.34h, #12161a', c: 'static' },
+        { a: 'segment', b: 'same rect, zone fill 17% / 100%', c: 'per frame' },
+        { a: 'halo', b: 'stroke w0.7h, 22% / 34% α', c: 'lit only' },
+        { a: 'centre bar', b: 'rect, white 6% / 50% α', c: 'per frame' },
+      ],
+      snippet:
+        'int lit = (int)(value * N + 0.5f);\n' +
+        'int pk  = (int)(peak  * N + 0.5f) - 1;\n\n' +
+        'for (i = 0; i < N; i++) {\n' +
+        '  on = (i < lit) || (i == pk)\n' +
+        '       || (clip && i >= N - 1);\n' +
+        '  vg_lite_translate(0, pitch, &m);\n' +
+        '  vg_lite_draw(rt, &pill, ..., &m,\n' +
+        '      on ? ZONE[i] : dim(ZONE[i]));\n' +
+        '}',
+    };
+  }
+}
+</script>
+</body>
+</html>

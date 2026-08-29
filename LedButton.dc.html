@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="0 0 100 100" width="{{ px }}" height="{{ px }}" onClick="{{ onPress }}" style="display:block;cursor:pointer">
+  <defs>
+    <linearGradient id="{{ capId }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="{{ capTop }}"></stop>
+      <stop offset="0.62" stop-color="{{ capMid }}"></stop>
+      <stop offset="1" stop-color="{{ capLow }}"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="98" height="98" rx="16" fill="#1c1c1e" stroke="{{ bezelStroke }}" stroke-width="{{ bezelW }}"></rect>
+  <rect x="7" y="6" width="86" height="88" rx="13" fill="#101012" opacity="0.9"></rect>
+  <rect x="{{ capX }}" y="{{ capY }}" width="80" height="80" rx="11" fill="url(#{{ capId }})"></rect>
+  <rect x="{{ hlX }}" y="{{ hlY }}" width="72" height="11" rx="5.5" fill="#ffffff" opacity="{{ hlA }}"></rect>
+  <rect x="{{ ledX }}" y="{{ ledY }}" width="48" height="15" rx="3.5" fill="{{ ledFill }}" stroke="{{ ledGlow }}" stroke-width="{{ ledGlowW }}" stroke-opacity="{{ ledGlowA }}"></rect>
+  <g fill="#000000" opacity="0.22">
+    <circle cx="{{ dot1X }}" cy="{{ dotY }}" r="1.7"></circle>
+    <circle cx="{{ dot2X }}" cy="{{ dotY }}" r="1.7"></circle>
+  </g>
+  <rect x="{{ capX }}" y="{{ capBaseY }}" width="80" height="7" rx="3.5" fill="#8e8b84" opacity="{{ baseA }}"></rect>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:140,&quot;height&quot;:140},&quot;lit&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;pressed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;cue&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;color&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;red&quot;,&quot;options&quot;:[&quot;red&quot;,&quot;amber&quot;,&quot;green&quot;,&quot;blue&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:96,&quot;min&quot;:20,&quot;max&quot;:260,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;onPress&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const LED = {
+  red: { on: '#ff3b30', off: '#5e2b28' },
+  amber: { on: '#ffa41f', off: '#5c3d18' },
+  green: { on: '#4be060', off: '#254a2b' },
+  blue: { on: '#5aa8ff', off: '#22384f' },
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const px = Number(this.props.size ?? 96);
+    const lit = !!this.props.lit;
+    const pressed = !!this.props.pressed;
+    const cue = !!this.props.cue;
+    const disabled = !!this.props.disabled;
+    const led = LED[this.props.color ?? 'red'] ?? LED.red;
+    const dy = pressed ? 2.5 : 0;
+
+    return {
+      px, capId: 'c' + (this.props.color ?? 'red') + (lit ? 1 : 0) + (pressed ? 1 : 0) + (disabled ? 1 : 0),
+      capX: 10, capY: 9 + dy, capBaseY: 82 + dy,
+      hlX: 14, hlY: 12 + dy, hlA: pressed ? 0.28 : 0.55,
+      ledX: 26, ledY: 19 + dy,
+      dot1X: 38, dot2X: 62, dotY: 26.5 + dy,
+      capTop: disabled ? '#e2e1de' : pressed ? '#dedcd7' : '#f7f5f1',
+      capMid: disabled ? '#d2d1ce' : pressed ? '#cbc9c3' : '#e8e6e1',
+      capLow: disabled ? '#bcbbb8' : pressed ? '#b4b2ad' : '#c9c7c1',
+      baseA: pressed ? 0.5 : 0.85,
+      bezelStroke: cue ? '#ff3b30' : '#3a3a3d',
+      bezelW: cue ? 3.5 : 2,
+      ledFill: disabled ? '#4a4a4c' : lit ? led.on : led.off,
+      ledGlow: led.on,
+      ledGlowW: lit && !disabled ? 10 : 0,
+      ledGlowA: lit && !disabled ? 0.38 : 0,
+      onPress: this.props.onPress,
+    };
+  }
+}
+</script>
+</body>
+</html>

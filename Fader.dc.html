@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" width="{{ w }}" height="{{ h }}" style="display:block;touch-action:none;cursor:ns-resize">
+  <defs>
+    <linearGradient id="{{ capId }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="{{ capTop }}"></stop>
+      <stop offset="0.46" stop-color="{{ capMid }}"></stop>
+      <stop offset="1" stop-color="{{ capLow }}"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="100" height="{{ vh }}" fill="{{ panel }}"></rect>
+  <g stroke="{{ tickColor }}" stroke-width="{{ tickW }}" stroke-linecap="butt">
+    <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="12">
+      <line x1="8" y1="{{ t.y }}" x2="92" y2="{{ t.y }}" stroke-opacity="{{ t.a }}"></line>
+    </sc-for>
+  </g>
+  <rect x="46.5" y="{{ rodY }}" width="7" height="{{ rodH }}" rx="1.5" fill="#14181b"></rect>
+  <sc-if value="{{ hasCenter }}" hint-placeholder-val="{{ false }}">
+    <line x1="4" y1="{{ centerY }}" x2="96" y2="{{ centerY }}" stroke="{{ centerColor }}" stroke-width="2.4"></line>
+  </sc-if>
+  <g transform="{{ capT }}">
+    <rect x="6" y="2.5" width="88" height="{{ capH }}" rx="2" fill="#1b1f22" opacity="0.45"></rect>
+    <rect x="4" y="0" width="88" height="{{ capH }}" rx="2" fill="url(#{{ capId }})" stroke="#20262a" stroke-width="1.6"></rect>
+    <rect x="4" y="{{ splitY }}" width="88" height="{{ splitH }}" fill="#20262a"></rect>
+    <rect x="9" y="{{ gloss1Y }}" width="78" height="{{ glossH }}" fill="#ffffff" opacity="{{ glossA }}"></rect>
+    <rect x="9" y="{{ gloss2Y }}" width="78" height="{{ glossH }}" fill="#ffffff" opacity="{{ glossA }}"></rect>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:110,&quot;height&quot;:240},&quot;value&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.5,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;},&quot;ticks&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:13,&quot;min&quot;:2,&quot;max&quot;:33,&quot;tsType&quot;:&quot;number&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;idle&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;active&quot;,&quot;disabled&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;center&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;panel&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#6d7a85&quot;,&quot;options&quot;:[&quot;#6d7a85&quot;,&quot;#5b6570&quot;,&quot;#7d8994&quot;,&quot;#4a535c&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:78,&quot;min&quot;:24,&quot;max&quot;:200,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:210,&quot;min&quot;:60,&quot;max&quot;:600,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const w = Number(this.props.w ?? 39);
+    const h = Number(this.props.h ?? 210);
+    const vh = Math.round((100 * h) / w);
+    const value = Math.max(0, Math.min(1, Number(this.props.value ?? 0.5)));
+    const count = Math.max(2, Number(this.props.ticks ?? 13));
+    const state = this.props.state ?? 'idle';
+    const disabled = state === 'disabled';
+    const active = state === 'active';
+
+    const capH = Math.max(14, vh * 0.11);
+    const pad = vh * 0.06;
+    const top = pad, bottom = vh - pad;
+    const travel = bottom - top - capH;
+    const capY = top + (1 - value) * travel;
+
+    const ticks = [];
+    for (let i = 0; i < count; i++) {
+      const y = top + capH / 2 + (i * (travel)) / (count - 1);
+      ticks.push({ y: Math.round(y * 10) / 10, a: i % 4 === 0 ? 0.62 : 0.34 });
+    }
+
+    return {
+      w, h, vh, viewBox: `0 0 100 ${vh}`, ticks,
+      tickColor: disabled ? '#c8cdd0' : '#e8eef0',
+      tickW: Math.max(1.4, vh * 0.012),
+      panel: this.props.panel ?? '#6d7a85',
+      rodY: top + capH / 2 - 2, rodH: travel + 4,
+      capT: `translate(0 ${Math.round(capY * 10) / 10})`,
+      capH, splitY: capH / 2 - capH * 0.07, splitH: capH * 0.14,
+      gloss1Y: capH * 0.16, gloss2Y: capH * 0.68, glossH: Math.max(1.5, capH * 0.12),
+      glossA: disabled ? 0.3 : 0.75,
+      capId: 'f' + Math.round(w) + state,
+      capTop: disabled ? '#d2d5d4' : active ? '#ffffff' : '#f4f5f4',
+      capMid: disabled ? '#b4b8b8' : '#dcdedd',
+      capLow: disabled ? '#9aa0a1' : active ? '#c8cbca' : '#b6baba',
+      hasCenter: this.props.center === true,
+      centerY: top + capH / 2 + travel / 2,
+      centerColor: disabled ? '#8f9598' : '#20262a',
+    };
+  }
+}
+</script>
+</body>
+</html>

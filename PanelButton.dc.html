@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" width="{{ w }}" height="{{ h }}" onClick="{{ onPress }}" style="display:block;cursor:pointer">
+  <defs>
+    <linearGradient id="{{ bodyId }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="{{ bodyTop }}"></stop>
+      <stop offset="0.55" stop-color="{{ bodyMid }}"></stop>
+      <stop offset="1" stop-color="{{ bodyLow }}"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="{{ vw }}" height="{{ vh }}" rx="2" fill="#303048"></rect>
+  <rect x="{{ i }}" y="{{ i }}" width="{{ innerW }}" height="{{ innerH }}" fill="url(#{{ bodyId }})"></rect>
+  <rect x="{{ i }}" y="{{ i }}" width="{{ innerW }}" height="{{ sheenH }}" fill="#d8d8f0" opacity="0.75"></rect>
+  <rect x="{{ i }}" y="{{ sheenY }}" width="{{ innerW }}" height="{{ sheenLine }}" fill="#f0f0f0" opacity="0.9"></rect>
+  <rect x="{{ i }}" y="{{ shadowY }}" width="{{ innerW }}" height="{{ shadowH }}" fill="#303048" opacity="0.5"></rect>
+  <rect x="{{ i }}" y="{{ i }}" width="{{ innerW }}" height="{{ innerH }}" fill="{{ washFill }}" opacity="{{ washA }}"></rect>
+  <g transform="{{ glyphT }}">
+    <path d="{{ glyph }}" fill="{{ glyphFill }}" stroke="{{ glyphGlow }}" stroke-width="{{ glowW }}" stroke-opacity="{{ glowA }}" stroke-linejoin="round"></path>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:160,&quot;height&quot;:140},&quot;glyph&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;play&quot;,&quot;options&quot;:[&quot;play&quot;,&quot;stop&quot;,&quot;record&quot;,&quot;rewind&quot;,&quot;forward&quot;,&quot;up&quot;,&quot;down&quot;,&quot;bar&quot;,&quot;dot&quot;,&quot;none&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;green&quot;,&quot;options&quot;:[&quot;green&quot;,&quot;amber&quot;,&quot;red&quot;,&quot;blue&quot;,&quot;pale&quot;,&quot;none&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;on&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:128,&quot;min&quot;:24,&quot;max&quot;:400,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:100,&quot;min&quot;:18,&quot;max&quot;:400,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;glyphScale&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.62,&quot;min&quot;:0.3,&quot;max&quot;:0.9,&quot;step&quot;:0.02,&quot;tsType&quot;:&quot;number&quot;},&quot;onPress&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const GLYPH = {
+  play: 'M32 18L84 50L32 82Z',
+  stop: 'M28 28H72V72H28Z',
+  record: 'M50 20A30 30 0 1 1 49.9 20Z',
+  rewind: 'M50 22V78L20 50ZM80 22V78L50 50Z',
+  forward: 'M50 22V78L80 50ZM20 22V78L50 50Z',
+  up: 'M50 30L74 66H26Z',
+  down: 'M50 70L74 34H26Z',
+  bar: 'M18 42H82V58H18Z',
+  dot: 'M50 34A16 16 0 1 1 49.9 34Z',
+  none: '',
+};
+const ACCENT = {
+  green: '#48e070', amber: '#f0a030', red: '#f04848',
+  blue: '#90a8f0', pale: '#d8f0f0', none: '#303048',
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const w = Number(this.props.w ?? 128);
+    const h = Number(this.props.h ?? 100);
+    const on = !!this.props.on;
+    const vw = 100, vh = Math.round((100 * h) / w);
+    const acc = ACCENT[this.props.accent ?? 'blue'] ?? ACCENT.blue;
+    const i = 2.2;
+    const g = Math.min(vw, vh) * (Number(this.props.glyphScale ?? 0.62));
+    const s = g / 100;
+    return {
+      w, h, vw, vh, i, viewBox: `0 0 ${vw} ${vh}`,
+      bodyId: 'b' + (this.props.glyph ?? 'x') + Math.round(w) + (on ? 1 : 0),
+      innerW: vw - i * 2, innerH: vh - i * 2,
+      sheenH: vh * 0.11, sheenY: i + vh * 0.11, sheenLine: vh * 0.05,
+      shadowY: vh - i - vh * 0.1, shadowH: vh * 0.1,
+      bodyTop: on ? '#a0b4f4' : '#90a8f0',
+      bodyMid: on ? '#6b84cc' : '#6078c0',
+      bodyLow: '#486090',
+      washFill: acc, washA: on ? 0.12 : 0,
+      glyph: GLYPH[this.props.glyph ?? 'none'] ?? '',
+      glyphT: `translate(${(vw - g) / 2} ${(vh - g) / 2}) scale(${s})`,
+      glyphFill: on ? acc : '#303048',
+      glyphGlow: on ? acc : 'none',
+      glowW: on ? 14 : 0, glowA: on ? 0.32 : 0,
+      onPress: this.props.onPress,
+    };
+  }
+}
+</script>
+</body>
+</html>

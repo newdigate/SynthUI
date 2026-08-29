@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:56px 48px 80px;display:flex;flex-direction:column;gap:28px;align-items:center">
+
+  <div style="width:100%;max-width:1120px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Screen · vg_lite · audio file view</div>
+    <h1 style="margin:0;font-size:38px;font-weight:600;letter-spacing:-0.02em;line-height:1.1">Waveform</h1>
+    <p style="margin:0;font-size:16px;line-height:1.55;color:#4c4f6b;max-width:72ch">Fixed head: the file streams under a welded centre line while tracking is on. Turn tracking off and the view stays put while the head runs on. Zoom spans the whole take down to five pixels per sample, and the drawing changes with it — coarse peak columns, then one min/max column per pixel, then the samples themselves.</p>
+  </div>
+
+  <div style="background:#17171c;border:1px solid #2a2a30;border-radius:12px;padding:16px;box-shadow:0 18px 40px rgba(20,20,35,0.18);width:100%;max-width:1120px">
+    <div style="background:#0e131b;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 14px;background:#121821;border-bottom:1px solid #1e2733;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.06em;color:#6b7d90;flex-wrap:wrap">
+        <button onClick="{{ togglePlay }}" style="width:40px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid #2c3a49;border-radius:3px;background:{{ playBg }};cursor:pointer;padding:0">
+          <svg width="12" height="12" viewBox="0 0 14 14"><path d="{{ playIcon }}" fill="{{ playFg }}"></path></svg>
+        </button>
+        <button onClick="{{ toggleTrack }}" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:8px 13px;border:1px solid {{ trackBorder }};border-radius:3px;background:{{ trackBg }};color:{{ trackFg }};cursor:pointer">track {{ trackState }}</button>
+        <span style="color:#cfe0ea;font-size:12px;letter-spacing:0.02em">{{ timecode }}</span>
+        <span>bar {{ barNo }}</span>
+        <span style="color:#6b7d90">take_04.wav · 48 k · 24 bit</span>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <span style="letter-spacing:0.14em;text-transform:uppercase;color:#5c6f82">zoom</span>
+          <div style="display:flex;border:1px solid #2c3a49;border-radius:3px;overflow:hidden">
+            <button onClick="{{ zoomOut }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;width:32px;height:32px;border:0;border-right:1px solid #2c3a49;background:#141c26;color:#9fb4c6;cursor:pointer">−</button>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;min-width:104px;display:flex;align-items:center;justify-content:center;background:#0d1219;color:#8fa5b8">{{ zoomLabel }}</div>
+            <button onClick="{{ zoomIn }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;width:32px;height:32px;border:0;border-left:1px solid #2c3a49;background:#141c26;color:#9fb4c6;cursor:pointer">+</button>
+          </div>
+          <button onClick="{{ zoomFit }}" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:8px 11px;border:1px solid #2c3a49;border-radius:3px;background:#141c26;color:#9fb4c6;cursor:pointer">fit</button>
+          <button onClick="{{ zoomOne }}" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:8px 11px;border:1px solid #2c3a49;border-radius:3px;background:#141c26;color:#9fb4c6;cursor:pointer">1:1</button>
+        </div>
+      </div>
+
+      <div style="position:relative;height:24px;background:#121821;border-bottom:1px solid #1e2733;overflow:hidden">{{ rulerLabels }}</div>
+
+      <div ref="{{ laneRef }}" onWheel="{{ onWheel }}" onMouseDown="{{ onDown }}" onMouseMove="{{ onMove }}" onMouseUp="{{ onUp }}" onMouseLeave="{{ onUp }}" onTouchStart="{{ onTouchStart }}" onTouchMove="{{ onTouchMove }}" onTouchEnd="{{ onUp }}" style="position:relative;height:280px;overflow:hidden;cursor:grab;user-select:none;touch-action:none">
+        <svg width="100%" height="280" style="display:block">
+          <rect x="0" y="0" width="100%" height="280" fill="#0e131b"></rect>
+          <g transform="{{ contentT }}">
+            <rect x="{{ barX }}" y="0" width="{{ barW }}" height="280" fill="#f5c66a" opacity="0.06"></rect>
+            <rect x="{{ selX }}" y="0" width="{{ selW }}" height="280" fill="#b9cfe0" opacity="0.07"></rect>
+            <rect x="{{ selX }}" y="0" width="1.5" height="280" fill="#ffc861"></rect>
+            <rect x="{{ selX2 }}" y="0" width="1.5" height="280" fill="#ffc861"></rect>
+            <path d="{{ selFlagIn }}" fill="#ffc861"></path>
+            <path d="{{ selFlagOut }}" fill="#ffc861"></path>
+          </g>
+          <rect x="0" y="140" width="100%" height="1" fill="#22303f"></rect>
+          <g transform="{{ bufT }}">
+            <path d="{{ wavePath }}" stroke="{{ wave }}" stroke-width="{{ waveSw }}" fill="{{ waveFill }}" stroke-linejoin="round"></path>
+            <sc-for list="{{ dots }}" as="d" hint-placeholder-count="0">
+              <circle cx="{{ d.x }}" cy="{{ d.y }}" r="2.4" fill="#f5c66a"></circle>
+            </sc-for>
+          </g>
+          <rect x="{{ headX }}" y="0" width="1.5" height="280" fill="#e04a3c" opacity="{{ headA }}"></rect>
+          <path d="{{ headFlag }}" fill="#e04a3c" opacity="{{ headA }}"></path>
+        </svg>
+        <sc-if value="{{ showCatch }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ reTrack }}" style="position:absolute;right:14px;bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:9px 13px;border:1px solid #55291f;border-radius:3px;background:#1d1210;color:#e0736a;cursor:pointer">↩ catch up</button>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ showOverview }}" hint-placeholder-val="{{ true }}">
+      <div ref="{{ ovRef }}" onMouseDown="{{ onOvDown }}" onMouseMove="{{ onOvMove }}" onMouseUp="{{ onUp }}" onMouseLeave="{{ onUp }}" style="position:relative;height:52px;border-top:1px solid #1e2733;cursor:pointer;user-select:none">
+        <svg width="100%" height="52" style="display:block">
+          <rect x="0" y="0" width="100%" height="52" fill="#0b1017"></rect>
+          <path d="{{ ovPath }}" stroke="#41586c" stroke-width="1" fill="none"></path>
+          <rect x="{{ ovSelX }}" y="0" width="{{ ovSelW }}" height="52" fill="#ffc861" opacity="0.13"></rect>
+          <rect x="{{ ovWinX }}" y="0.5" width="{{ ovWinW }}" height="51" fill="#b9cfe0" opacity="0.08"></rect>
+          <rect x="{{ ovWinX }}" y="0.5" width="{{ ovWinW }}" height="51" fill="none" stroke="#7f97ab" stroke-width="1"></rect>
+          <rect x="{{ ovPlayX }}" y="0" width="1" height="52" fill="#e04a3c"></rect>
+        </svg>
+      </div>
+      </sc-if>
+
+      <div style="display:flex;align-items:center;gap:18px;padding:9px 14px;background:#121821;border-top:1px solid #1e2733;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.06em;color:#5c6f82;flex-wrap:wrap">
+        <span>{{ drawMode }}</span>
+        <span>drag lane = scroll · ⌘/ctrl + wheel = zoom · drag flags = range</span>
+        <span style="margin-left:auto;color:#ffc861">in {{ inSmp }} · out {{ outSmp }} · {{ selLen }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="width:100%;max-width:1120px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:32px;font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+    <sc-for list="{{ spec }}" as="s" hint-placeholder-count="4">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="color:#22243c;font-weight:500">{{ s.a }}</div>
+        <div style="color:#5c5f7e;line-height:1.7">{{ s.b }}</div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tracking&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;overview&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;waveColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#b9cfe0&quot;,&quot;options&quot;:[&quot;#b9cfe0&quot;,&quot;#8fe0c0&quot;,&quot;#f5c66a&quot;,&quot;#e0a0b8&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+const BPM = 112, BEAT = 60 / BPM, BARS = 8, DUR = BARS * 4 * BEAT, SR = 48000, H = 280, MID = 140, HALF = 128;
+
+function env(t) {
+  if (t < 0 || t > DUR) return 0;
+  const beat = t / BEAT, ph = beat % 1, bar = Math.floor(beat / 4);
+  const kick = Math.exp(-ph * 8) * 0.95;
+  const off = (beat * 2) % 1;
+  const hat = off < 0.12 ? 0.3 * Math.exp(-off * 26) : 0;
+  const sect = bar < 2 ? 0.5 : bar < 4 ? 0.78 : bar < 6 ? 0.62 : 1;
+  return Math.min(1, (kick + hat + 0.26 * (0.6 + 0.4 * Math.sin(t * 1.9))) * sect);
+}
+function sampleAt(t) {
+  return env(t) * (0.6 * Math.sin(2 * Math.PI * 110 * t) + 0.25 * Math.sin(2 * Math.PI * 220 * t + 1.1) + 0.11 * Math.sin(2 * Math.PI * 440 * t + 2.3) + 0.06 * Math.sin(2 * Math.PI * 1320 * t));
+}
+// one column per pixel: min and max of the real signal inside that pixel
+function buildMinMax(startPx, widthPx, pps) {
+  const spp = SR / pps, subs = Math.max(2, Math.min(24, Math.round(spp))), dt = 1 / pps;
+  let d = '';
+  for (let i = 0; i < widthPx; i++) {
+    const t0 = (startPx + i) / pps;
+    let mn = 1, mx = -1;
+    for (let k = 0; k < subs; k++) {
+      const v = sampleAt(t0 + (k / subs) * dt);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const yTop = MID - mx * HALF, yBot = MID - mn * HALF;
+    d += `M${i} ${yTop.toFixed(1)}V${Math.max(yBot, yTop + 0.7).toFixed(1)}`;
+  }
+  return d;
+}
+function buildSamples(startPx, widthPx, pps) {
+  const pxPerSample = pps / SR;
+  const first = Math.floor((startPx / pps) * SR), n = Math.ceil(widthPx / pxPerSample) + 2;
+  const pts = [], dots = [];
+  for (let k = 0; k <= n; k++) {
+    const s = first + k, t = s / SR;
+    const x = (s / SR) * pps - startPx, y = MID - sampleAt(t) * HALF;
+    pts.push(`${x.toFixed(1)} ${y.toFixed(1)}`);
+    if (pxPerSample > 3) dots.push({ x: x.toFixed(1), y: y.toFixed(1) });
+  }
+  return { d: 'M' + pts.join('L'), dots };
+}
+
+const NICE = [4 * BEAT, BEAT, 0.5, 0.25, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5];
+function tc(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s % 1) * 1000);
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+}
+function grp(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
+
+class Component extends DCLogic {
+  state = { pos: 4.4, playing: true, track: null, scrollX: 0, pps: null, w: 1000, drag: null, inT: 6.43, outT: 8.57 };
+  laneRef = React.createRef();
+  ovRef = React.createRef();
+
+  componentDidMount() {
+    const measure = () => {
+      const el = this.laneRef.current;
+      if (el && el.clientWidth && el.clientWidth !== this.state.w) this.setState({ w: el.clientWidth });
+    };
+    measure();
+    this.ro = new ResizeObserver(measure);
+    if (this.laneRef.current) this.ro.observe(this.laneRef.current);
+    this.last = performance.now();
+    const tick = (t) => {
+      const dt = Math.min(0.1, (t - this.last) / 1000);
+      this.last = t;
+      if (this.state.playing) this.setState((s) => ({ pos: (s.pos + dt) % DUR }));
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this.raf); if (this.ro) this.ro.disconnect(); }
+
+  pps() { return this.state.pps ?? this.state.w / DUR; }
+  clampScroll(x, pps) { return Math.max(-40, Math.min(x, DUR * pps - this.state.w + 40)); }
+
+  // one buffer of 3 viewports; re-anchored only when the view nears its edge
+  buffer(startPx, pps) {
+    const w = this.state.w, bw = Math.round(w * 3);
+    const c = this._buf;
+    const leftOk = c && (c.start <= startPx - w * 0.2 || c.start <= 0);
+    const rightOk = c && (c.start + c.w >= startPx + w + w * 0.2 || c.start + c.w >= DUR * pps);
+    if (c && c.pps === pps && c.w === bw && leftOk && rightOk) return c;
+    const anchor = Math.max(0, Math.round(startPx - w));
+    const spp = SR / pps;
+    let buf;
+    if (spp > 1) buf = { d: buildMinMax(anchor, bw, pps), sw: 1, fill: 'none', dots: [], mode: (spp > 64 ? 'peak columns · ' + grp(spp) : 'min/max per pixel · ' + spp.toFixed(1)) + ' smp per px' };
+    else { const s = buildSamples(anchor, bw, pps); buf = { d: s.d, sw: 1.4, fill: 'none', dots: s.dots, mode: 'sample polyline · ' + (1 / spp).toFixed(1) + ' px per sample' }; }
+    buf.start = anchor; buf.pps = pps; buf.w = bw;
+    this._buf = buf;
+    return buf;
+  }
+
+  setZoom(f, anchorPx) {
+    const pps = this.pps(), fit = this.state.w / DUR;
+    const next = Math.max(fit, Math.min(SR * 5, pps * f));
+    const a = anchorPx ?? this.state.w / 2;
+    const scroll = ((this.state.scrollX + a) * next) / pps - a;
+    this.setState({ pps: next, scrollX: this.clampScroll(scroll, next) });
+  }
+
+  renderVals() {
+    const w = this.state.w, pps = this.pps(), pos = this.state.pos;
+    const track = this.state.track ?? (this.props.tracking !== false);
+    const wave = this.props.waveColor || '#b9cfe0';
+    const contentW = DUR * pps;
+    const maxScroll = Math.max(0, contentW - w);
+    const scrollX = track ? Math.max(0, Math.min(pos * pps - w / 2, maxScroll)) : this.state.scrollX;
+    const buf = this.buffer(scrollX, pps);
+    const headX = pos * pps - scrollX;
+    const barIdx = Math.floor(pos / (4 * BEAT));
+    const { inT, outT } = this.state;
+    const ovX = (t) => (t / DUR) * w;
+
+    const step = NICE.find((s) => s * pps >= 92) ?? NICE[NICE.length - 1];
+    const firstK = Math.ceil(scrollX / pps / step);
+    const labels = [];
+    for (let k = firstK; k < firstK + 400; k++) {
+      const t = k * step;
+      const x = t * pps - scrollX;
+      if (x >= w) break;
+      if (t < -1e-9 || t > DUR + 1e-9) continue;
+      const beatIdx = Math.round(t / BEAT);
+      const onBeat = Math.abs(t - beatIdx * BEAT) < 1e-6;
+      const strong = step >= BEAT && onBeat && beatIdx % 4 === 0;
+      const text = step >= BEAT
+        ? (strong ? 'bar ' + (beatIdx / 4 + 1) : String((beatIdx % 4) + 1))
+        : (SR / pps < 4 ? grp(t * SR) : tc(t));
+      labels.push(React.createElement('div', {
+        key: t.toFixed(6),
+        style: {
+          position: 'absolute', left: x.toFixed(1) + 'px', top: 0, height: '24px', paddingLeft: '6px',
+          borderLeft: '1px solid ' + (strong ? '#2c3f52' : '#1c2733'),
+          fontFamily: "'IBM Plex Mono', monospace", fontSize: '9.5px', lineHeight: '24px',
+          color: strong ? '#8fa5b8' : '#5c6f82', whiteSpace: 'nowrap', pointerEvents: 'none',
+        },
+      }, text));
+    }
+
+    const flag = (x, dir) => `M${x} 0h${dir * 9}l${-dir * 9} 11Z`;
+    const dragAt = (clientX) => {
+      const el = this.laneRef.current;
+      const x = clientX - (el ? el.getBoundingClientRect().left : 0);
+      const inX = inT * pps - scrollX, outX = outT * pps - scrollX;
+      if (Math.abs(x - inX) < 8) return 'in';
+      if (Math.abs(x - outX) < 8) return 'out';
+      return 'scroll';
+    };
+    const move = (clientX) => {
+      const d = this.state.drag;
+      if (!d) return;
+      const dx = clientX - d.x;
+      if (d.kind === 'scroll') this.setState({ track: false, scrollX: this.clampScroll(d.sx - dx, pps) });
+      else {
+        const t = Math.max(0, Math.min(DUR, d.t0 + dx / pps));
+        this.setState(d.kind === 'in' ? { inT: Math.min(t, this.state.outT - 0.01) } : { outT: Math.max(t, this.state.inT + 0.01) });
+      }
+    };
+    const ovSeek = (clientX) => {
+      const el = this.ovRef.current;
+      if (!el) return;
+      const x = clientX - el.getBoundingClientRect().left;
+      this.setState({ track: false, scrollX: this.clampScroll((x / w) * contentW - w / 2, pps) });
+    };
+
+    return {
+      laneRef: this.laneRef, ovRef: this.ovRef,
+      rulerLabels: labels,
+      contentT: `translate(${(-scrollX).toFixed(1)} 0)`,
+      bufT: `translate(${(buf.start - scrollX).toFixed(1)} 0)`,
+      wavePath: buf.d, waveSw: buf.sw, waveFill: buf.fill, dots: buf.dots, wave,
+      showOverview: this.props.overview !== false,
+      drawMode: buf.mode,
+      barX: (barIdx * 4 * BEAT * pps).toFixed(1), barW: (4 * BEAT * pps).toFixed(1),
+      selX: (inT * pps).toFixed(1), selX2: (outT * pps).toFixed(1),
+      selW: Math.max(1, (outT - inT) * pps).toFixed(1),
+      selFlagIn: flag((inT * pps).toFixed(1), 1), selFlagOut: flag((outT * pps).toFixed(1), -1),
+      headX: headX.toFixed(1), headA: track ? 1 : 0.5,
+      headFlag: `M${(headX - 6).toFixed(1)} 0h13l-6.5 9Z`,
+      showCatch: !track && (headX < 0 || headX > w),
+      ovPath: this._ov && this._ovW === w ? this._ov : (this._ovW = w, this._ov = buildOverview(w)),
+      ovWinX: ((scrollX / contentW) * w).toFixed(1),
+      ovWinW: Math.max(2, (w / contentW) * w).toFixed(1),
+      ovSelX: ovX(inT).toFixed(1), ovSelW: Math.max(1, ovX(outT) - ovX(inT)).toFixed(1),
+      ovPlayX: ovX(pos).toFixed(1),
+      timecode: tc(pos), barNo: barIdx + 1,
+      inSmp: grp(inT * SR), outSmp: grp(outT * SR), selLen: ((outT - inT) * 1000).toFixed(0) + ' ms',
+      zoomLabel: SR / pps >= 1 ? grp(SR / pps) + ' smp/px' : (pps / SR).toFixed(1) + ' px/smp',
+      trackState: track ? 'on' : 'off',
+      trackBg: track ? '#20180a' : '#141c26',
+      trackFg: track ? '#ffc861' : '#6b7d90',
+      trackBorder: track ? '#4a3c18' : '#2c3a49',
+      playIcon: this.state.playing ? 'M2 1h4v12H2zM8 1h4v12H8z' : 'M2 1l11 6-11 6z',
+      playBg: this.state.playing ? '#20180a' : '#141c26',
+      playFg: this.state.playing ? '#ffc861' : '#8fa5b8',
+      togglePlay: () => this.setState((s) => ({ playing: !s.playing })),
+      toggleTrack: () => this.setState({ track: !track, scrollX: Math.max(0, Math.min(pos * pps - w / 2, maxScroll)) }),
+      reTrack: () => this.setState({ track: true }),
+      zoomIn: () => this.setZoom(1.8, track ? w / 2 : null),
+      zoomOut: () => this.setZoom(1 / 1.8, track ? w / 2 : null),
+      zoomFit: () => this.setState({ pps: w / DUR, scrollX: 0 }),
+      zoomOne: () => this.setZoom(SR / pps, track ? w / 2 : null),
+      onWheel: (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          const el = this.laneRef.current;
+          this.setZoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - (el ? el.getBoundingClientRect().left : 0));
+        } else {
+          const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          this.setState({ track: false, scrollX: this.clampScroll(scrollX + d * 1.5, pps) });
+        }
+      },
+      onDown: (e) => {
+        const kind = dragAt(e.clientX);
+        this.setState({ drag: { kind, x: e.clientX, sx: scrollX, t0: kind === 'in' ? inT : outT } });
+      },
+      onMove: (e) => move(e.clientX),
+      onTouchStart: (e) => {
+        const t = e.touches[0], kind = dragAt(t.clientX);
+        this.setState({ drag: { kind, x: t.clientX, sx: scrollX, t0: kind === 'in' ? inT : outT } });
+      },
+      onTouchMove: (e) => { const t = e.touches[0]; if (t) move(t.clientX); },
+      onUp: () => { if (this.state.drag) this.setState({ drag: null }); },
+      onOvDown: (e) => { ovSeek(e.clientX); this.setState({ drag: { kind: 'ov' } }); },
+      onOvMove: (e) => { if (this.state.drag && this.state.drag.kind === 'ov') ovSeek(e.clientX); },
+      spec: [
+        { a: 'buffer', b: 'Peaks are built for three viewports and translated; the path is re-authored only when the view nears the buffer edge.' },
+        { a: 'zoom', b: 'Fit to 5 px per sample. One min/max column per pixel while a pixel holds more than one sample, a sample polyline with dots below that.' },
+        { a: 'tracking', b: 'On, the head is welded to the centre. Off, the view holds and a catch-up chip appears once the head leaves the screen.' },
+        { a: 'range', b: 'Bar band follows the transport; the in/out flags are a sticky sample range with draggable edges.' },
+      ],
+    };
+  }
+}
+
+function buildOverview(w) {
+  const pps = w / DUR, dt = 2 / pps;
+  let d = '';
+  for (let i = 0; i < Math.round(w); i += 2) {
+    const t0 = i / pps;
+    let mn = 1, mx = -1;
+    for (let k = 0; k < 20; k++) {
+      const v = sampleAt(t0 + (k / 20) * dt);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    d += `M${i} ${(26 - mx * 22).toFixed(1)}V${Math.max(26 - mn * 22, 26 - mx * 22 + 0.7).toFixed(1)}`;
+  }
+  return d;
+}
+
+</script>
+</body>
+</html>

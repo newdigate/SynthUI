@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; border-bottom:1px solid #b9bce0; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+
+<section style="background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:56px 48px 90px;display:flex;flex-direction:column;gap:34px">
+  <div style="display:flex;flex-direction:column;gap:12px;max-width:88ch">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Turn 1 · tracker pattern view · three directions</div>
+    <h1 style="margin:0;font-size:40px;font-weight:600;letter-spacing:-0.02em;line-height:1.06">Multi-track pattern grid</h1>
+    <p style="margin:0;font-size:16px;line-height:1.55;color:#4c4f6b">Same pattern — 8 channels, 22 visible rows of 64 — three answers to the hard part: a grid that must scroll in two axes on a panel too narrow to hold it. Vertical scroll is cheap (integer row offset, whole-lane blit). Horizontal is the expensive one, so each direction spends it differently. <a href="#1a">1a</a> pays the horizontal scroll honestly, <a href="#1b">1b</a> refuses to scroll horizontally at all, <a href="#1c">1c</a> drops text density so all channels fit. Combinable: the cursor-row and gutter behaviour from any one drops into the others.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:44px">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:16px;width:1092px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1a</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Full grid, frozen cursor row, twin gutters</h2>
+        <span style="font-size:14px;color:#6f7396">The reference read straight: pattern streams under a locked centre row.</span>
+      </div>
+
+      <div style="background:#101319;border:1px solid #232833;border-radius:10px;padding:12px">
+        <div style="background:#01040a;border:1px solid #143a72;border-radius:4px;overflow:hidden;font-family:'IBM Plex Mono',monospace">
+          <div style="display:flex;align-items:center;gap:18px;padding:8px 12px;background:#061027;border-bottom:1px solid #143a72;font-size:10.5px;letter-spacing:0.06em;color:#5f83b8">
+            <span style="color:#cfe2ff">PTN 07</span>
+            <span>64 rows · 8 ch</span>
+            <span>SPD 06 · BPM 140</span>
+            <span style="margin-left:auto;color:#f5c66a">EDIT · row 29 · ch 3 · note</span>
+          </div>
+
+          <div style="position:relative">
+            <div style="display:flex;align-items:stretch">
+              <div style="display:flex;flex-direction:column;background:#02060f;border-right:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;overflow:hidden;flex:1">
+                <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="8">
+                  <div style="flex:1;min-width:0;border-right:1px solid #123262;display:flex;flex-direction:column">
+                    <div style="height:19px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#061027;border-bottom:1px solid #123262;font-size:10px;letter-spacing:0.08em;color:#5f83b8">
+                      <span style="color:#cfe2ff;font-weight:600">{{ ch.num }}</span>
+                      <span>{{ ch.name }}</span>
+                    </div>
+                    <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                      <div style="height:18px">
+                        <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                          <div style="height:18px;display:flex;align-items:center;gap:7px;padding:0 8px;font-size:12px;letter-spacing:0.02em">
+                            <span style="width:26px;color:#dbe9ff;font-weight:500">{{ c.note }}</span>
+                            <span style="width:16px;color:#f5c66a">{{ c.inst }}</span>
+                            <span style="width:16px;color:#8fd07a">{{ c.vol }}</span>
+                            <span style="width:24px;color:#6fb6e8">{{ c.fx }}</span>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ c.off }}" hint-placeholder-val="{{ false }}">
+                          <div style="height:18px;display:flex;align-items:center;gap:7px;padding:0 8px;font-size:12px;letter-spacing:0.02em;color:#1f3a63">
+                            <span style="width:26px">{{ c.note }}</span>
+                            <span style="width:16px">{{ c.inst }}</span>
+                            <span style="width:16px">{{ c.vol }}</span>
+                            <span style="width:24px">{{ c.fx }}</span>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;background:#02060f;border-left:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="position:absolute;left:0;right:0;top:235px;height:18px;background:#1b4d9e;opacity:0.42;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:234px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:253px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+            <div style="position:absolute;left:171px;top:236px;width:28px;height:16px;border:1px solid #f5c66a;pointer-events:none"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#061027;border-top:1px solid #143a72">
+            <div style="width:16px;height:14px;background:#123a78;border:1px solid #2f6fd0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#cfe2ff">&#9664;</div>
+            <div style="flex:1;height:14px;background:#02060f;border:1px solid #123262;position:relative">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:62%;background:#2f6fd0;opacity:0.55"></div>
+            </div>
+            <div style="width:16px;height:14px;background:#123a78;border:1px solid #2f6fd0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#cfe2ff">&#9654;</div>
+            <span style="font-size:10px;color:#5f83b8;padding-left:6px">ch 1–8 of 12</span>
+          </div>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Cursor row is frozen at a fixed y — same trick as the waveform playhead. Vertical scroll is one integer offset and a whole-lane blit; no cell re-layout.</li>
+        <li>Twin hex gutters mean the row number is never more than four channels away, which is the reason the original had them.</li>
+        <li>Horizontal scroll is channel-quantised: the strip snaps channel to channel, so a channel is never half-cut and the clip rects stay aligned to cell boundaries.</li>
+        <li>Cost: on a narrow panel only 4–5 channels are visible at once, and the field is all text — 704 glyph blits per frame at this size.</li>
+      </ul>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:16px;width:1092px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1b</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Focus + context — no horizontal scroll</h2>
+        <span style="font-size:14px;color:#6f7396">Two channels expanded, the rest collapsed to activity ribbons that stay on screen.</span>
+      </div>
+
+      <div style="background:#101319;border:1px solid #232833;border-radius:10px;padding:12px">
+        <div style="background:#01040a;border:1px solid #143a72;border-radius:4px;overflow:hidden;font-family:'IBM Plex Mono',monospace">
+          <div style="display:flex;align-items:center;gap:18px;padding:8px 12px;background:#061027;border-bottom:1px solid #143a72;font-size:10.5px;letter-spacing:0.06em;color:#5f83b8">
+            <span style="color:#cfe2ff">PTN 07</span>
+            <span>focus ch 03 + 04</span>
+            <span style="margin-left:auto;color:#f5c66a">knob = move focus · no h-scroll</span>
+          </div>
+
+          <div style="position:relative">
+            <div style="display:flex;align-items:stretch">
+              <div style="display:flex;flex-direction:column;background:#02060f;border-right:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+
+              <sc-for list="{{ ribbonsLeft }}" as="ch" hint-placeholder-count="2">
+                <div style="flex:none;width:30px;border-right:1px solid #0d2650;display:flex;flex-direction:column;background:#02060f">
+                  <div style="height:19px;display:flex;align-items:center;justify-content:center;background:#040c1c;border-bottom:1px solid #123262;font-size:10px;color:#3f6398">{{ ch.num }}</div>
+                  <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                    <div style="height:18px;display:flex;align-items:center;justify-content:center;gap:2px">
+                      <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                        <div style="width:14px;height:4px;background:#2f6fd0"></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+              <sc-for list="{{ focusChannels }}" as="ch" hint-placeholder-count="2">
+                <div style="flex:1;border-left:1px solid #2f6fd0;border-right:1px solid #2f6fd0;display:flex;flex-direction:column;background:#020a18">
+                  <div style="height:19px;display:flex;align-items:center;gap:6px;padding:0 10px;background:#0b1f45;border-bottom:1px solid #2f6fd0;font-size:10px;letter-spacing:0.08em;color:#9dc0f0">
+                    <span style="color:#ffffff;font-weight:600">{{ ch.num }}</span>
+                    <span>{{ ch.name }}</span>
+                    <span style="margin-left:auto;color:#f5c66a">{{ ch.meta }}</span>
+                  </div>
+                  <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                    <div style="height:18px">
+                      <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                        <div style="height:18px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:13px;letter-spacing:0.03em">
+                          <span style="width:32px;color:#eaf3ff;font-weight:500">{{ c.note }}</span>
+                          <span style="width:20px;color:#f5c66a">{{ c.inst }}</span>
+                          <span style="width:20px;color:#8fd07a">{{ c.vol }}</span>
+                          <span style="width:28px;color:#6fb6e8">{{ c.fx }}</span>
+                          <span style="margin-left:auto;color:#3f6398;font-size:11px">{{ c.hint }}</span>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ c.off }}" hint-placeholder-val="{{ false }}">
+                        <div style="height:18px;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:13px;letter-spacing:0.03em;color:#1f3a63">
+                          <span style="width:32px">{{ c.note }}</span>
+                          <span style="width:20px">{{ c.inst }}</span>
+                          <span style="width:20px">{{ c.vol }}</span>
+                          <span style="width:28px">{{ c.fx }}</span>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+              <sc-for list="{{ ribbonsRight }}" as="ch" hint-placeholder-count="8">
+                <div style="flex:none;width:30px;border-left:1px solid #0d2650;display:flex;flex-direction:column;background:#02060f">
+                  <div style="height:19px;display:flex;align-items:center;justify-content:center;background:#040c1c;border-bottom:1px solid #123262;font-size:10px;color:#3f6398">{{ ch.num }}</div>
+                  <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                    <div style="height:18px;display:flex;align-items:center;justify-content:center">
+                      <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                        <div style="width:14px;height:4px;background:#2f6fd0"></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+              <div style="display:flex;flex-direction:column;background:#02060f;border-left:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="position:absolute;left:0;right:0;top:235px;height:18px;background:#1b4d9e;opacity:0.42;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:234px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:253px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:14px;padding:7px 12px;background:#061027;border-top:1px solid #143a72;font-size:10px;color:#5f83b8">
+            <span>ribbon = note present only</span>
+            <span>focus pair slides 1 ch at a time</span>
+            <span style="margin-left:auto;color:#9dc0f0">12 channels · all visible</span>
+          </div>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Horizontal scrolling disappears as a concept — the whole song width is always on screen, and a knob slides which pair is expanded.</li>
+        <li>Ribbons are one 14×4 rect per triggered row: cheaper than four glyphs, and the pattern's rhythm stays readable at a glance.</li>
+        <li>Editing always happens in a wide, generously-spaced cell — better on a small panel than eight cramped columns.</li>
+        <li>Cost: you cannot compare note values across distant channels, and it is not what a tracker user's muscle memory expects.</li>
+      </ul>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:16px;width:1092px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1c</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Note-only field, details on demand</h2>
+        <span style="font-size:14px;color:#6f7396">All 12 channels fit: note text plus two micro-bars; instrument and effect resolve on the cursor row.</span>
+      </div>
+
+      <div style="background:#101319;border:1px solid #232833;border-radius:10px;padding:12px">
+        <div style="background:#01040a;border:1px solid #143a72;border-radius:4px;overflow:hidden;font-family:'IBM Plex Mono',monospace">
+          <div style="display:flex;align-items:center;gap:18px;padding:8px 12px;background:#061027;border-bottom:1px solid #143a72;font-size:10.5px;letter-spacing:0.06em;color:#5f83b8">
+            <span style="color:#cfe2ff">PTN 07</span>
+            <span>NOTE VIEW</span>
+            <span style="margin-left:auto;color:#f5c66a">hold SHIFT for full cells</span>
+          </div>
+
+          <div style="position:relative">
+            <div style="display:flex;align-items:stretch">
+              <div style="display:flex;flex-direction:column;background:#02060f;border-right:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex:1">
+                <sc-for list="{{ wideChannels }}" as="ch" hint-placeholder-count="12">
+                  <div style="flex:1;border-right:1px solid #0d2650;display:flex;flex-direction:column;min-width:0">
+                    <div style="height:19px;display:flex;align-items:center;justify-content:center;background:#061027;border-bottom:1px solid #123262;font-size:10px;letter-spacing:0.06em;color:#5f83b8">{{ ch.num }}</div>
+                    <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                      <div style="height:18px;display:flex;align-items:center;gap:5px;padding:0 6px">
+                        <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                          <span style="font-size:12px;color:#cfe2ff;letter-spacing:0.01em">{{ c.note }}</span>
+                        </sc-if>
+                        <sc-if value="{{ c.off }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:12px;color:#1f3a63;letter-spacing:0.01em">{{ c.note }}</span>
+                        </sc-if>
+                        <div style="display:flex;gap:1.5px;margin-left:auto;align-items:center">
+                          <sc-for list="{{ c.bars }}" as="b" hint-placeholder-count="3">
+                            <div style="width:2px;height:8px;background:#8fd07a"></div>
+                          </sc-for>
+                        </div>
+                        <sc-if value="{{ c.hasFx }}" hint-placeholder-val="{{ true }}">
+                          <div style="width:4px;height:4px;background:#6fb6e8"></div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;background:#02060f;border-left:1px solid #143a72;flex:none">
+                <div style="height:19px"></div>
+                <sc-for list="{{ rows }}" as="row" hint-placeholder-count="22">
+                  <div style="height:18px;display:flex;align-items:center;justify-content:center;width:34px;font-size:12px;font-weight:600;color:#4f7ec0">{{ row.hex }}</div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="position:absolute;left:0;right:0;top:235px;height:18px;background:#1b4d9e;opacity:0.35;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:234px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;top:253px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+          </div>
+
+          <div style="display:flex;align-items:stretch;background:#0b1f45;border-top:1px solid #2f6fd0">
+            <div style="width:34px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#ffffff;background:#123a78">29</div>
+            <div style="flex:1;display:flex">
+              <sc-for list="{{ cursorRowCells }}" as="c" hint-placeholder-count="12">
+                <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px 4px;border-right:1px solid #1b4d9e;font-size:11px;min-width:0">
+                  <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:10px">
+                      <span style="color:#eaf3ff">{{ c.note }}</span>
+                      <span style="color:#f5c66a">{{ c.inst }}</span>
+                      <span style="color:#8fd07a">{{ c.vol }}</span>
+                      <span style="color:#6fb6e8">{{ c.fx }}</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ c.off }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:10px;color:#2a4a7a">
+                      <span>{{ c.note }}</span>
+                      <span>{{ c.inst }}</span>
+                      <span>{{ c.vol }}</span>
+                      <span>{{ c.fx }}</span>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+            <div style="width:34px;background:#123a78"></div>
+          </div>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Only the note reads as text in the field; volume becomes a 1–4 tick bar and any effect a single pip, so a cell is 3 glyphs instead of 11.</li>
+        <li>The full cell data for the cursor row lives in a permanent strip under the grid — one place to look while editing, and it never scrolls.</li>
+        <li>Twelve channels wide with no horizontal scroll at all; the field re-reads as pitch contour and density rather than a wall of hex.</li>
+        <li>Cost: instrument numbers are invisible until the cursor lands on the row, which hurts when a channel plays two instruments.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div style="max-width:88ch;display:flex;flex-direction:column;gap:8px;border-top:1px solid #d8d6cb;padding-top:22px">
+    <h3 style="margin:0;font-size:16px;font-weight:600">Open questions for you</h3>
+    <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+      <li>Real panel width and channel count — 8 or 12+? That decides whether <a href="#1a">1a</a> is even viable.</li>
+      <li>Cursor row frozen at centre (all three shown that way) or free-running until it hits an edge, like classic trackers?</li>
+      <li>Do you keep the original's blue-on-black palette, or bring it into the kit's own dark grey + amber palette used by the other sheets?</li>
+      <li>Is editing in scope, or is this a viewer? Editing pulls the design toward <a href="#1b">1b</a> and <a href="#1c">1c</a>.</li>
+    </ul>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const NOTES = ['C-','C#','D-','D#','E-','F-','F#','G-','G#','A-','A#','B-'];
+    let s = 20260828;
+    const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const hex = n => n.toString(16).toUpperCase().padStart(2, '0');
+
+    const START = 0x1d, ROWS = 22, CURSOR = 12;
+    const rows = Array.from({ length: ROWS }, (_, i) => ({ hex: hex(START + i), i }));
+
+    const defs = [
+      { name: 'KICK', step: 4, off: 0, pitch: 24, inst: '01', fx: 0.1 },
+      { name: 'BASS', step: 2, off: 0, pitch: 35, inst: '02', fx: 0.45 },
+      { name: 'LEAD', step: 3, off: 1, pitch: 62, inst: '05', fx: 0.6 },
+      { name: 'CHRD', step: 4, off: 2, pitch: 55, inst: '07', fx: 0.3 },
+      { name: 'SNAR', step: 4, off: 2, pitch: 31, inst: '03', fx: 0.1 },
+      { name: 'HATS', step: 1, off: 0, pitch: 42, inst: '04', fx: 0.2 },
+      { name: 'PERC', step: 6, off: 3, pitch: 46, inst: '06', fx: 0.25 },
+      { name: 'PAD ', step: 8, off: 0, pitch: 48, inst: '08', fx: 0.5 },
+      { name: 'ARP ', step: 2, off: 1, pitch: 67, inst: '09', fx: 0.4 },
+      { name: 'STAB', step: 8, off: 4, pitch: 59, inst: '0A', fx: 0.35 },
+      { name: 'NOIS', step: 5, off: 2, pitch: 40, inst: '0B', fx: 0.3 },
+      { name: 'FX  ', step: 11, off: 5, pitch: 70, inst: '0C', fx: 0.8 }
+    ];
+    const FX = ['A08', 'C40', 'E13', 'F06', '1F2', '4A5'];
+
+    const mk = (d, i) => {
+      const on = (i + d.off) % d.step === 0 && rnd() > 0.12;
+      if (!on) return { note: '---', inst: '--', vol: '--', fx: '---', on: false, off: true, hasFx: false, bars: [], hint: '' };
+      const p = d.pitch + (rnd() > 0.72 ? (rnd() > 0.5 ? 2 : -3) : 0);
+      const vol = 32 + Math.floor(rnd() * 30);
+      const hasFx = rnd() < d.fx;
+      return {
+        note: NOTES[p % 12] + Math.floor(p / 12),
+        inst: d.inst,
+        vol: vol.toString(16).toUpperCase(),
+        fx: hasFx ? FX[Math.floor(rnd() * FX.length)] : '---',
+        on: true,
+        off: false,
+        hasFx,
+        bars: Array.from({ length: 1 + Math.floor((vol - 32) / 8) }, (_, k) => k),
+        hint: hasFx ? 'slide' : ''
+      };
+    };
+
+    const all = defs.map((d, ci) => ({
+      num: hex(ci + 1),
+      name: d.name.trim(),
+      meta: 'vol ' + (60 - ci * 2),
+      cells: rows.map((_, i) => mk(d, i))
+    }));
+
+    return {
+      rows,
+      channels: all.slice(0, 8),
+      focusChannels: [all[2], all[3]],
+      ribbonsLeft: [all[0], all[1]],
+      ribbonsRight: all.slice(4),
+      wideChannels: all,
+      cursorRowCells: all.map(c => c.cells[CURSOR])
+    };
+  }
+}
+
+</script>
+</body>
+</html>

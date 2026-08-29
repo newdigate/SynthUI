@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · RB-338 rebuild · transport · lamps · switches</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">One bevelled body, a glyph, and a lit state</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Twenty-odd sprite components in the archive are the same object three times over. Rebuilt, transport, spinners, checkbox and the four-state switch are one <span style="font-family:'IBM Plex Mono',monospace">PanelButton</span> with a different glyph and accent; every lamp is one <span style="font-family:'IBM Plex Mono',monospace">Lamp</span> with a colour list. State is luminance only — nothing moves, nothing resizes.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">2 components · 25 sprites retired</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">bevel as proportion, not 1px</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">glow = stroke pass</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#181830;padding:40px 44px;display:flex;gap:52px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:12px;align-items:center">
+        <dc-import name="PanelButton" glyph="rewind" accent="blue" on="{{ false }}" w="{{ 74 }}" h="{{ 58 }}" onPress="{{ onRew }}" hint-size="74px,58px"></dc-import>
+        <dc-import name="PanelButton" glyph="play" accent="green" on="{{ playing }}" w="{{ 74 }}" h="{{ 58 }}" onPress="{{ onPlay }}" hint-size="74px,58px"></dc-import>
+        <dc-import name="PanelButton" glyph="stop" accent="amber" on="{{ stopped }}" w="{{ 74 }}" h="{{ 58 }}" onPress="{{ onStop }}" hint-size="74px,58px"></dc-import>
+        <dc-import name="PanelButton" glyph="forward" accent="blue" on="{{ false }}" w="{{ 74 }}" h="{{ 58 }}" onPress="{{ onFwd }}" hint-size="74px,58px"></dc-import>
+        <dc-import name="PanelButton" glyph="record" accent="red" on="{{ recording }}" w="{{ 74 }}" h="{{ 58 }}" onPress="{{ onRec }}" hint-size="74px,58px"></dc-import>
+      </div>
+      <div style="display:flex;gap:26px;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#7878c0">tempo</span>
+          <dc-import name="SevenSegment" text="140.0" size="{{ 44 }}" accent="blue" hint-size="180px,48px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#7878c0">bar : beat</span>
+          <dc-import name="SevenSegment" text="{{ barBeat }}" size="{{ 44 }}" accent="cyan" hint-size="180px,48px"></dc-import>
+        </div>
+      </div>
+      <div style="display:flex;gap:22px;align-items:center">
+        <dc-import name="Knob" size="{{ 62 }}" angle="{{ knobA }}" mode="bounded" hint-size="62px,62px"></dc-import>
+        <dc-import name="Knob" size="{{ 62 }}" angle="{{ knobB }}" mode="arc" hint-size="62px,62px"></dc-import>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <sc-for list="{{ meter }}" as="m" hint-placeholder-count="4">
+          <dc-import name="Lamp" shape="bar" color="{{ m.color }}" on="{{ m.on }}" w="{{ 34 }}" h="{{ 16 }}" hint-size="34px,16px"></dc-import>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">transport is live · play / stop / record toggle the counter and the meter</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · Transport · 12559–12563</h2>
+      <span style="font-size:14px;color:#6f7396">One body, five glyphs, off over on. Only luminance differs.</span>
+    </div>
+    <div style="background:#181830;border-radius:5px;padding:34px 32px;display:flex;gap:34px;flex-wrap:wrap">
+      <sc-for list="{{ transport }}" as="t" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <div style="display:flex;gap:10px">
+            <dc-import name="PanelButton" glyph="{{ t.glyph }}" accent="{{ t.accent }}" on="{{ false }}" w="{{ 96 }}" h="{{ 75 }}" hint-size="96px,75px"></dc-import>
+            <dc-import name="PanelButton" glyph="{{ t.glyph }}" accent="{{ t.accent }}" on="{{ true }}" w="{{ 96 }}" h="{{ 75 }}" hint-size="96px,75px"></dc-import>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6078c0">{{ t.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Steppers &amp; switches</h2>
+      <span style="font-size:14px;color:#6f7396">12019 / 12020 spinner pair, 12040 checkbox, 12067 four-state.</span>
+    </div>
+    <div style="background:#181830;border-radius:5px;padding:34px 32px;display:flex;gap:56px;flex-wrap:wrap;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <dc-import name="PanelButton" glyph="up" accent="pale" on="{{ spinUp }}" w="{{ 66 }}" h="{{ 54 }}" onPress="{{ onSpinUp }}" hint-size="66px,54px"></dc-import>
+          <dc-import name="PanelButton" glyph="down" accent="pale" on="{{ spinDown }}" w="{{ 66 }}" h="{{ 54 }}" onPress="{{ onSpinDown }}" hint-size="66px,54px"></dc-import>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6078c0">stepper · {{ spinValue }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;background:#484860;padding:6px;border-radius:3px">
+          <dc-import name="PanelButton" glyph="bar" accent="pale" on="{{ false }}" w="{{ 108 }}" h="{{ 46 }}" hint-size="108px,46px"></dc-import>
+          <dc-import name="Lamp" shape="round" color="#c8e050" on="{{ checked }}" w="{{ 40 }}" h="{{ 46 }}" onPress="{{ onCheck }}" hint-size="40px,46px"></dc-import>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6078c0">checkbox · {{ checkLabel }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:5px;background:#484860;padding:7px;border-radius:3px">
+          <sc-for list="{{ switchCells }}" as="c" hint-placeholder-count="4">
+            <dc-import name="Lamp" shape="bar" color="{{ c.color }}" on="{{ c.on }}" w="{{ 52 }}" h="{{ 20 }}" onPress="{{ c.pick }}" hint-size="52px,20px"></dc-import>
+          </sc-for>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6078c0">four-state · pos {{ switchPos }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Lamps · 12505–12566</h2>
+      <span style="font-size:14px;color:#6f7396">One shape, N colour treatments. Off is the same fill at 30% α with the halo dropped.</span>
+    </div>
+    <div style="background:#181830;border-radius:5px;padding:34px 32px;display:flex;gap:44px;flex-wrap:wrap;align-items:flex-start">
+      <sc-for list="{{ lampSpecs }}" as="l" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:13px;align-items:flex-start">
+          <div style="display:flex;gap:9px;align-items:center">
+            <sc-for list="{{ l.cells }}" as="c" hint-placeholder-count="2">
+              <dc-import name="Lamp" shape="{{ c.shape }}" color="{{ c.color }}" on="{{ c.on }}" w="{{ c.w }}" h="{{ c.h }}" hint-size="40px,40px"></dc-import>
+            </sc-for>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6078c0">{{ l.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Body anatomy</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ anatomy }}" as="r" hint-placeholder-count="7">
+          <div style="padding:10px 12px 10px 0;border-bottom:1px solid #e4e2d7;font-weight:500">{{ r.a }}</div>
+          <div style="padding:10px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+        </sc-for>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b;max-width:62ch">The original bevel is one light row and one dark row because 32×25 had no room for more. Held as a proportion — 11% of the body height for the sheen, 10% for the shadow — it reads the same at 300px.</div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">05 · Replaces</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <img src="c-transport.png" alt="original transport sprites" style="width:100%;image-rendering:pixelated;border-radius:4px"></img>
+        <img src="c-lamps.png" alt="original lamp sprites" style="width:100%;image-rendering:pixelated;border-radius:4px"></img>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+        <div>25 sprite ids · 2–4 states each · fixed px</div>
+        <div>one bitmap per state per size</div>
+        <div style="color:#22243c;font-weight:500;margin-top:10px">2 components · glyph + accent props</div>
+        <div style="color:#22243c;font-weight:500">any size · restyle by palette swap</div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: desaturated blue-grey chrome, saturated colour only on active states, and the bloom that spills 1–2px past the glyph. Dropped: per-size art, and the twenty "unnamed" ids that turned out to be the same plate at other dimensions.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;glyphScale&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.62,&quot;min&quot;:0.3,&quot;max&quot;:0.9,&quot;step&quot;:0.02,&quot;tsType&quot;:&quot;number&quot;}}">
+const RAMP = ['#f04848', '#f07830', '#f0d030', '#f078b0'];
+
+class Component extends DCLogic {
+  state = { playing: false, recording: false, tick: 0, spin: 12, spinDir: 0, checked: true, sw: 1 };
+  componentDidMount() {
+    this.t = setInterval(() => { if (this.state.playing) this.setState((s) => ({ tick: s.tick + 1 })); }, 420);
+  }
+  componentWillUnmount() { clearInterval(this.t); }
+
+  renderVals() {
+    const s = this.state;
+    const beat = (s.tick % 4) + 1;
+    const bar = (Math.floor(s.tick / 4) % 999) + 1;
+    const level = s.playing ? 2 + (s.tick % 3) : 1;
+
+    return {
+      playing: s.playing, stopped: !s.playing, recording: s.recording,
+      barBeat: String(bar).padStart(3, ' ') + ':' + beat,
+      knobA: -140 + (s.spin / 24) * 280,
+      knobB: s.playing ? -140 + ((s.tick * 17) % 280) : -40,
+      meter: RAMP.map((c, i) => ({ color: c, on: i < level })),
+      onPlay: () => this.setState({ playing: true }),
+      onStop: () => this.setState({ playing: false, recording: false }),
+      onRec: () => this.setState((p) => ({ recording: !p.recording })),
+      onRew: () => this.setState((p) => ({ tick: Math.max(0, p.tick - 4) })),
+      onFwd: () => this.setState((p) => ({ tick: p.tick + 4 })),
+
+      transport: [
+        { glyph: 'play', accent: 'green', label: '12559 play' },
+        { glyph: 'stop', accent: 'amber', label: '12560 stop' },
+        { glyph: 'rewind', accent: 'blue', label: '12561 rewind' },
+        { glyph: 'forward', accent: 'blue', label: '12562 forward' },
+        { glyph: 'record', accent: 'red', label: '12563 record' },
+      ],
+
+      spinUp: s.spinDir === 1, spinDown: s.spinDir === -1, spinValue: s.spin,
+      onSpinUp: () => { this.setState((p) => ({ spin: Math.min(24, p.spin + 1), spinDir: 1 })); clearTimeout(this.sd); this.sd = setTimeout(() => this.setState({ spinDir: 0 }), 160); },
+      onSpinDown: () => { this.setState((p) => ({ spin: Math.max(0, p.spin - 1), spinDir: -1 })); clearTimeout(this.sd); this.sd = setTimeout(() => this.setState({ spinDir: 0 }), 160); },
+      checked: s.checked, checkLabel: s.checked ? 'on' : 'off',
+      onCheck: () => this.setState((p) => ({ checked: !p.checked })),
+      switchPos: s.sw + 1,
+      switchCells: ['#f078b0', '#c850d0', '#78c8f0', '#48e070'].map((c, i) => ({
+        color: c, on: i === s.sw, pick: () => this.setState({ sw: i }),
+      })),
+
+      lampSpecs: [
+        { label: '12505 small-a · 2 states', cells: [{ shape: 'round', color: '#f078b0', on: false, w: 40, h: 40 }, { shape: 'round', color: '#f078b0', on: true, w: 40, h: 40 }] },
+        { label: '12506 small-b · 2 states', cells: [{ shape: 'round', color: '#e04848', on: false, w: 40, h: 40 }, { shape: 'round', color: '#e04848', on: true, w: 40, h: 40 }] },
+        { label: '12510 bar · 2 states', cells: [{ shape: 'pill', color: '#d8f0f0', on: false, w: 72, h: 38 }, { shape: 'pill', color: '#d8f0f0', on: true, w: 72, h: 38 }] },
+        { label: '12041 tri-state', cells: [{ shape: 'round', color: '#90a8f0', on: true, w: 44, h: 44 }, { shape: 'round', color: '#48e070', on: true, w: 44, h: 44 }, { shape: 'round', color: '#e04848', on: true, w: 44, h: 44 }] },
+        { label: '12566 quad-state', cells: [{ shape: 'bar', color: '#f078b0', on: true, w: 52, h: 30 }, { shape: 'bar', color: '#c850d0', on: true, w: 52, h: 30 }, { shape: 'bar', color: '#7890a8', on: false, w: 52, h: 30 }, { shape: 'bar', color: '#48e070', on: true, w: 52, h: 30 }] },
+        { label: '12524 colour ramp', cells: RAMP.map((c) => ({ shape: 'bar', color: c, on: true, w: 34, h: 26 })) },
+      ],
+
+      anatomy: [
+        { a: 'frame', b: 'rect, #303048, r2' },
+        { a: 'body', b: '#90a8f0 → #6078c0 → #486090' },
+        { a: 'sheen', b: '#d8d8f0 75% α, top 11%' },
+        { a: 'highlight', b: '#f0f0f0 90% α, 5% band' },
+        { a: 'shadow', b: '#303048 50% α, bottom 10%' },
+        { a: 'glyph', b: 'single path, 62% of min side' },
+        { a: 'lit', b: 'accent fill + stroke w14 32% α' },
+      ],
+
+      snippet:
+        'draw_body(rt, &plate, &m, on);\n' +
+        '  /* 5 rects: frame, body, sheen,\n' +
+        '     highlight, shadow — all static */\n\n' +
+        'vg_lite_draw(rt, &glyph[id],\n' +
+        '    VG_LITE_FILL_NON_ZERO, &m,\n' +
+        '    VG_LITE_BLEND_SRC_OVER,\n' +
+        '    on ? accent : INK);\n\n' +
+        'if (on) stroke_pass(rt, &glyph[id],\n' +
+        '    &m, accent, 14, 0.32f);',
+    };
+  }
+}
+</script>
+</body>
+</html>

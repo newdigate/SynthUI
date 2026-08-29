@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · notch disc · light &amp; dark</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Notch disc, one matrix per knob</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Three flat-filled paths — body, hub, index wedge — rotated as one object. No tick ring, no gradients, no per-frame path authoring: a value change is a single matrix write, so 140.00° and 0° cost the same. Light and dark are the same geometry with a different five-colour table.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">3 paths · 14 verts</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">1 matrix</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">float angle</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">5-colour theme table</span>
+    </div>
+  </header>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#eeece3;padding:40px 36px;display:flex;flex-direction:column;gap:24px;align-items:center">
+      <div onPointerDown="{{ down }}" onPointerMove="{{ move }}" onPointerUp="{{ up }}" onWheel="{{ wheel }}" style="touch-action:none;cursor:grab;user-select:none">
+        <dc-import name="RotaryKnob" theme="light" angle="{{ angle }}" size="{{ 210 }}" state="{{ heroState }}" hint-size="210px,210px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-0.02em">{{ angleText }}°</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6f7396">light · drag or scroll</div>
+      </div>
+    </div>
+    <div style="background:#181822;padding:40px 36px;display:flex;flex-direction:column;gap:24px;align-items:center">
+      <div onPointerDown="{{ down }}" onPointerMove="{{ move }}" onPointerUp="{{ up }}" onWheel="{{ wheel }}" style="touch-action:none;cursor:grab;user-select:none">
+        <dc-import name="RotaryKnob" theme="dark" angle="{{ angle }}" size="{{ 210 }}" state="{{ heroState }}" hint-size="210px,210px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-0.02em;color:#ffd24a">{{ angleText }}°</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7a7a95">dark · same geometry</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · Colour table</h2>
+      <span style="font-size:14px;color:#6f7396">Five entries per theme. Nothing else differs between the two modes.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,0.8fr) minmax(0,1fr) minmax(0,1fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+      <div style="padding:10px 12px 10px 0;border-bottom:1px solid #d8d6ca;font-weight:600">slot</div>
+      <div style="padding:10px 12px;border-bottom:1px solid #d8d6ca;font-weight:600">light</div>
+      <div style="padding:10px 0;border-bottom:1px solid #d8d6ca;font-weight:600">dark</div>
+      <sc-for list="{{ table }}" as="r" hint-placeholder-count="5">
+        <div style="padding:10px 12px 10px 0;border-bottom:1px solid #e4e2d7;font-weight:500">{{ r.slot }}</div>
+        <div style="padding:10px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e;display:flex;align-items:center;gap:9px">
+          <span style="width:14px;height:14px;border-radius:2px;border:1px solid #cfcdc2;background:{{ r.light }}"></span>{{ r.light }}
+        </div>
+        <div style="padding:10px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;display:flex;align-items:center;gap:9px">
+          <span style="width:14px;height:14px;border-radius:2px;border:1px solid #cfcdc2;background:{{ r.dark }}"></span>{{ r.dark }}
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · States</h2>
+      <span style="font-size:14px;color:#6f7396">Fill swaps only — geometry, size and matrix are untouched.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+            <div style="background:#eeece3;padding:20px;display:flex;justify-content:center">
+              <dc-import name="RotaryKnob" theme="light" angle="{{ angle }}" size="{{ 76 }}" state="{{ s.state }}" hint-size="76px,76px"></dc-import>
+            </div>
+            <div style="background:#181822;padding:20px;display:flex;justify-content:center">
+              <dc-import name="RotaryKnob" theme="dark" angle="{{ angle }}" size="{{ 76 }}" state="{{ s.state }}" hint-size="76px,76px"></dc-import>
+            </div>
+          </div>
+          <div style="padding:15px 17px 17px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Sizes</h2>
+      <span style="font-size:14px;color:#6f7396">The index is a wedge, not a line, so it holds its weight all the way down to 24px.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden">
+      <div style="background:#eeece3;padding:34px;display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;justify-content:center">
+        <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:11px;align-items:center">
+            <dc-import name="RotaryKnob" theme="light" angle="{{ angle }}" size="{{ z.px }}" hint-size="60px,60px"></dc-import>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6f7396">{{ z.px }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#181822;padding:34px;display:flex;gap:30px;align-items:flex-end;flex-wrap:wrap;justify-content:center">
+        <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:11px;align-items:center">
+            <dc-import name="RotaryKnob" theme="dark" angle="{{ angle }}" size="{{ z.px }}" hint-size="60px,60px"></dc-import>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7a7a95">{{ z.px }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Endless vs bounded</h2>
+      <span style="font-size:14px;color:#6f7396">A bounded knob swaps the well's ring for an open arc between its stops — still one static path.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden">
+      <div style="background:#eeece3;padding:34px;display:flex;gap:46px;justify-content:center;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="RotaryKnob" theme="light" angle="{{ angle }}" size="{{ 120 }}" mode="endless" hint-size="120px,120px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6f7396">endless</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="RotaryKnob" theme="light" angle="{{ bounded }}" size="{{ 120 }}" mode="bounded" hint-size="120px,120px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6f7396">bounded ±150°</span>
+        </div>
+      </div>
+      <div style="background:#181822;padding:34px;display:flex;gap:46px;justify-content:center;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="RotaryKnob" theme="dark" angle="{{ angle }}" size="{{ 120 }}" mode="endless" hint-size="120px,120px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7a7a95">endless</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <dc-import name="RotaryKnob" theme="dark" angle="{{ bounded }}" size="{{ 120 }}" mode="bounded" hint-size="120px,120px"></dc-import>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7a7a95">bounded ±150°</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">05 · Draw list</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="4">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b;max-width:62ch">The three rotating paths are uploaded once at boot and never touched again. A bank of sixteen knobs is sixteen matrix writes and 48 flat fills per frame — no gradient units, no path re-tessellation, and the dirty rect is the r39 well.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">06 · vg_lite</h2>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Against the previous knob this drops both gradient objects, the per-frame arc authoring and the second matrix. What it costs you: the highlight now turns with the knob — which is why the form, not the shading, carries the angle.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#fcfbf6&quot;,&quot;options&quot;:[&quot;#fcfbf6&quot;,&quot;#ffd24a&quot;,&quot;#5be0a0&quot;,&quot;#ff6a52&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+class Component extends DCLogic {
+  state = { angle: 137.42, dragging: false };
+  raw = null;
+
+  at(e, el) {
+    const r = el.getBoundingClientRect();
+    return Math.atan2(e.clientX - (r.left + r.width / 2), (r.top + r.height / 2) - e.clientY) * 180 / Math.PI;
+  }
+
+  renderVals() {
+    const a = this.state.angle;
+    return {
+      angle: a, angleText: a.toFixed(2),
+      bounded: clamp(((a % 360) + 540) % 360 - 180, -150, 150),
+      heroState: this.state.dragging ? 'active' : 'idle',
+      down: (e) => { this.raw = this.at(e, e.currentTarget); e.currentTarget.setPointerCapture(e.pointerId); this.setState({ dragging: true }); },
+      move: (e) => {
+        if (!this.state.dragging) return;
+        const now = this.at(e, e.currentTarget);
+        let d = now - this.raw;
+        if (d > 180) d -= 360; else if (d < -180) d += 360;
+        this.raw = now;
+        this.setState((s) => ({ angle: s.angle + d }));
+      },
+      up: () => this.setState({ dragging: false }),
+      wheel: (e) => { e.preventDefault(); this.setState((s) => ({ angle: s.angle + e.deltaY * 0.2 })); },
+      table: [
+        { slot: 'well', light: '#dcdce6', dark: '#14141c' },
+        { slot: 'well stroke', light: '#b6b8cc', dark: '#34344a' },
+        { slot: 'body', light: '#282b60', dark: '#3c4176' },
+        { slot: 'hub', light: '#333871', dark: '#4a5090' },
+        { slot: 'index', light: '#fcfbf6', dark: '#ffd24a' },
+      ],
+      states: [
+        { name: 'idle', state: 'idle', note: 'Body and hub one step apart so the disc reads as turned metal without a gradient.' },
+        { name: 'active', state: 'active', note: 'Held: body and hub each lift one step. The index is unchanged, so the pointer never jumps.' },
+        { name: 'focus', state: 'focus', note: 'Well stroke takes the index colour and thickens to 3 — the ring, not the knob, shows focus.' },
+        { name: 'disabled', state: 'disabled', note: 'Whole table collapses toward the panel; the index drops to a low-contrast grey.' },
+      ],
+      sizes: [24, 36, 54, 84, 120].map((px) => ({ px })),
+      drawList: [
+        { a: 'well', b: 'circle r39 + stroke (or open arc)', c: 'static' },
+        { a: 'body', b: 'circle r36, flat fill', c: 'matrix' },
+        { a: 'hub', b: 'circle r27, flat fill', c: 'matrix' },
+        { a: 'index', b: 'annulus sector r16–36, ±8°', c: 'matrix' },
+      ],
+      snippet:
+        '/* boot: upload once */\n' +
+        'vg_lite_upload_path(&body);\n' +
+        'vg_lite_upload_path(&hub);\n' +
+        'vg_lite_upload_path(&index);\n\n' +
+        '/* per value change */\n' +
+        'vg_lite_identity(&m);\n' +
+        'vg_lite_translate(cx, cy, &m);\n' +
+        'vg_lite_rotate(deg, &m);   /* any float */\n' +
+        'vg_lite_scale(s, s, &m);\n\n' +
+        'const uint32_t *C = dark ? T_DARK\n' +
+        '                         : T_LIGHT;\n' +
+        'for (i = 0; i < 3; i++)\n' +
+        '  vg_lite_draw(rt, paths[i],\n' +
+        '      VG_LITE_FILL_NON_ZERO, &m,\n' +
+        '      VG_LITE_BLEND_SRC_OVER, C[i]);',
+    };
+  }
+}
+</script>
+</body>
+</html>

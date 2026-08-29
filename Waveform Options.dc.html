@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; border-bottom:1px solid #b9bce0; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+
+<section style="background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:56px 48px 90px;display:flex;flex-direction:column;gap:34px">
+  <div style="display:flex;flex-direction:column;gap:12px;max-width:88ch">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Turn 1 · waveform view · three directions</div>
+    <h1 style="margin:0;font-size:40px;font-weight:600;letter-spacing:-0.02em;line-height:1.06">Audio file view</h1>
+    <p style="margin:0;font-size:16px;line-height:1.55;color:#4c4f6b">Same file, same peak data, three different answers to the same question: what carries the view when zoom runs from whole-track to one sample per pixel. They are combinable — <a href="#1a">1a</a> is the frame, <a href="#1b">1b</a> is the zoom behaviour, <a href="#1c">1c</a> is the tracking and selection behaviour. Tell me which parts to keep.</p>
+  </div>
+
+  <div style="display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:16px;width:940px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1a</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Peak field + overview rail</h2>
+        <span style="font-size:14px;color:#6f7396">The reference, made honest: min/max columns, a fixed overview underneath.</span>
+      </div>
+
+      <div style="background:#17171c;border:1px solid #2a2a30;border-radius:10px;padding:14px">
+        <div style="background:#0e131b;border-radius:5px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:20px;padding:9px 14px;background:#121821;border-bottom:1px solid #1e2733;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.06em;color:#6b7d90">
+            <span style="color:#b9cfe0">take_04.wav</span>
+            <span>48 k · 24 bit · stereo</span>
+            <span>00:17.14</span>
+            <span style="margin-left:auto;color:#ffc861">bar 5 selected · 68 992 – 86 240</span>
+          </div>
+          <svg width="908" height="216" style="display:block">
+            <rect x="0" y="0" width="908" height="216" fill="#0e131b"></rect>
+            <rect x="{{ selX }}" y="0" width="{{ selW }}" height="216" fill="#f5c66a" opacity="0.09"></rect>
+            <rect x="{{ selX }}" y="0" width="1" height="216" fill="#f5c66a"></rect>
+            <rect x="{{ selX2 }}" y="0" width="1" height="216" fill="#f5c66a"></rect>
+            <sc-for list="{{ barTicks }}" as="t" hint-placeholder-count="9">
+              <rect x="{{ t.x }}" y="0" width="1" height="{{ t.h }}" fill="#233040"></rect>
+            </sc-for>
+            <rect x="0" y="108" width="908" height="1" fill="#22303f"></rect>
+            <path d="{{ mainPeaks }}" stroke="#b9cfe0" stroke-width="1" fill="none"></path>
+            <rect x="452" y="0" width="1.5" height="216" fill="#e04a3c"></rect>
+            <path d="M446 0h13l-6.5 9Z" fill="#e04a3c"></path>
+          </svg>
+          <div style="height:1px;background:#1e2733"></div>
+          <svg width="908" height="52" style="display:block">
+            <rect x="0" y="0" width="908" height="52" fill="#0b1017"></rect>
+            <path d="{{ overviewPeaks }}" stroke="#41586c" stroke-width="1" fill="none"></path>
+            <rect x="{{ winX }}" y="1" width="{{ winW }}" height="50" fill="#b9cfe0" opacity="0.08"></rect>
+            <rect x="{{ winX }}" y="1" width="{{ winW }}" height="50" fill="none" stroke="#7f97ab" stroke-width="1"></rect>
+            <rect x="{{ winX }}" y="18" width="3" height="16" rx="1.5" fill="#9fb4c6"></rect>
+            <rect x="{{ winHandle2 }}" y="18" width="3" height="16" rx="1.5" fill="#9fb4c6"></rect>
+            <rect x="{{ ovPlay }}" y="0" width="1" height="52" fill="#e04a3c"></rect>
+          </svg>
+          <div style="display:flex;align-items:center;gap:18px;padding:9px 14px;background:#121821;border-top:1px solid #1e2733;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7d90">
+            <span>drag rail = scroll · handles = zoom</span>
+            <span style="margin-left:auto">1 px = 940 smp · 19 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Detail lane and overview rail are the same peak table at two decimations — the rail never re-reads the file.</li>
+        <li>Range highlight is a translucent band with hard edges, so a bar selection stays legible over dense material.</li>
+        <li>Scroll and zoom are both expressed on the rail: drag the window to move, drag its handles to zoom.</li>
+      </ul>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:16px;width:940px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1b</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Zoom ladder — the drawing changes, not just the scale</h2>
+      </div>
+
+      <div style="background:#17171c;border:1px solid #2a2a30;border-radius:10px;padding:14px;display:flex;gap:12px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{ ladder }}" as="L" hint-placeholder-count="3">
+            <div style="background:#0e131b;border-radius:4px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:14px;padding:7px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7d90;background:#121821">
+                <span style="color:#b9cfe0">{{ L.name }}</span>
+                <span>{{ L.ratio }}</span>
+                <span style="margin-left:auto;color:#7f97ab">{{ L.draw }}</span>
+              </div>
+              <svg width="820" height="{{ L.h }}" style="display:block">
+                <rect x="0" y="0" width="820" height="{{ L.h }}" fill="#0e131b"></rect>
+                <rect x="{{ L.lensX }}" y="0" width="{{ L.lensW }}" height="{{ L.h }}" fill="#b9cfe0" opacity="{{ L.lensA }}"></rect>
+                <rect x="0" y="{{ L.mid }}" width="820" height="1" fill="#22303f"></rect>
+                <path d="{{ L.grid }}" stroke="#1a2534" stroke-width="1" fill="none"></path>
+                <path d="{{ L.wave }}" stroke="#b9cfe0" stroke-width="{{ L.sw }}" fill="{{ L.fill }}" stroke-linejoin="round"></path>
+                <sc-for list="{{ L.dots }}" as="d" hint-placeholder-count="0">
+                  <circle cx="{{ d.x }}" cy="{{ d.y }}" r="2.2" fill="#f5c66a"></circle>
+                </sc-for>
+              </svg>
+            </div>
+          </sc-for>
+        </div>
+        <div style="width:74px;background:#0e131b;border-radius:4px;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:0;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5c6f82">
+          <span style="letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px">zoom</span>
+          <sc-for list="{{ zoomRail }}" as="z" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:6px;height:34px">
+              <span style="width:34px;text-align:right;color:{{ z.fg }}">{{ z.label }}</span>
+              <span style="width:{{ z.w }}px;height:2px;background:{{ z.bar }}"></span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Three regimes, one gesture: peak columns while a pixel holds many samples, a filled envelope with a stroked edge in the middle band, and a connected polyline with sample dots once a pixel holds fewer than one.</li>
+        <li>The handover points are the interesting design decision — around 64 smp/px and 1 smp/px — and they can be crossfaded rather than switched.</li>
+        <li>Each panel keeps the lens of the one below it, so the zoom never loses its place.</li>
+      </ul>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:16px;width:940px">
+      <div style="display:flex;align-items:baseline;gap:14px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;background:#22243c;color:#f2f1ea;padding:5px 9px;border-radius:3px">1c</span>
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em">Fixed head — the tape moves, the playhead doesn't</h2>
+        <span style="font-size:14px;color:#6f7396">Live. Toggle tracking to compare.</span>
+      </div>
+
+      <div style="background:#17171c;border:1px solid #2a2a30;border-radius:10px;padding:14px">
+        <div style="background:#0e131b;border-radius:5px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:16px;padding:9px 14px;background:#121821;border-bottom:1px solid #1e2733;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6b7d90">
+            <button onClick="{{ toggleTrack }}" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:6px 12px;border:1px solid {{ trackBorder }};border-radius:3px;background:{{ trackBg }};color:{{ trackFg }};cursor:pointer">track {{ trackState }}</button>
+            <button onClick="{{ togglePlay }}" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;padding:6px 12px;border:1px solid #2c3a49;border-radius:3px;background:#141c26;color:#9fb4c6;cursor:pointer">{{ playLabel }}</button>
+            <span style="color:#b9cfe0">{{ timecode }}</span>
+            <span>bar {{ barNo }}</span>
+            <span style="margin-left:auto;color:#ffc861">in {{ inSmp }} · out {{ outSmp }}</span>
+          </div>
+          <div style="position:relative;overflow:hidden;height:184px">
+            <svg width="908" height="184" style="display:block">
+              <rect x="0" y="0" width="908" height="184" fill="#0e131b"></rect>
+              <g transform="{{ streamT }}">
+                <rect x="{{ barX }}" y="0" width="{{ barW }}" height="184" fill="#f5c66a" opacity="0.08"></rect>
+                <rect x="{{ selAX }}" y="0" width="{{ selAW }}" height="184" fill="#b9cfe0" opacity="0.06"></rect>
+                <rect x="{{ selAX }}" y="0" width="1" height="184" fill="#ffc861"></rect>
+                <rect x="{{ selAX2 }}" y="0" width="1" height="184" fill="#ffc861"></rect>
+                <rect x="0" y="92" width="3200" height="1" fill="#22303f"></rect>
+                <path d="{{ streamPeaks }}" stroke="#b9cfe0" stroke-width="1" fill="none"></path>
+              </g>
+              <rect x="454" y="0" width="1.5" height="184" fill="#e04a3c" opacity="{{ headA }}"></rect>
+              <path d="M448 0h13l-6.5 9Z" fill="#e04a3c" opacity="{{ headA }}"></path>
+              <rect x="{{ ghostX }}" y="0" width="1.5" height="184" fill="#e04a3c" opacity="{{ ghostA }}"></rect>
+            </svg>
+            <sc-if value="{{ showReturn }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ reTrack }}" style="position:absolute;right:12px;bottom:12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding:8px 12px;border:1px solid #55291f;border-radius:3px;background:#1d1210;color:#e0736a;cursor:pointer">↩ catch up</button>
+            </sc-if>
+          </div>
+          <svg width="908" height="34" style="display:block">
+            <rect x="0" y="0" width="908" height="34" fill="#0b1017"></rect>
+            <path d="{{ miniPeaks }}" stroke="#41586c" stroke-width="1" fill="none"></path>
+            <rect x="{{ miniWinX }}" y="0" width="{{ miniWinW }}" height="34" fill="#b9cfe0" opacity="0.09"></rect>
+            <rect x="{{ miniPlay }}" y="0" width="1" height="34" fill="#e04a3c"></rect>
+          </svg>
+        </div>
+      </div>
+
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:2px">
+        <li>Tracking on: the head is welded to the centre and the file streams under it — the only thing that moves is one translate.</li>
+        <li>Tracking off: the head runs free, the view stays where you left it, and a catch-up chip appears once the head leaves the screen.</li>
+        <li>The bar band follows the transport automatically; the in/out flags are a separate, sticky sample range you set by hand.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const BPM = 112, BEAT = 60 / BPM, BARS = 8, DUR = BARS * 4 * BEAT, SR = 48000;
+
+function lcg(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function env(t) {
+  const beat = t / BEAT, ph = beat % 1, bar = Math.floor(beat / 4);
+  const kick = Math.exp(-ph * 8) * 0.95;
+  const off = (beat * 2) % 1;
+  const hat = off < 0.12 ? 0.3 * Math.exp(-off * 26) : 0;
+  const sect = bar < 2 ? 0.5 : bar < 4 ? 0.78 : bar < 6 ? 0.62 : 1;
+  const pad = 0.26 * (0.6 + 0.4 * Math.sin(t * 1.9));
+  return Math.min(1, (kick + hat + pad) * sect);
+}
+function peakPath(cols, t0, t1, mid, half, seed, x0, step) {
+  const r = lcg(seed);
+  let d = '';
+  for (let i = 0; i < cols; i++) {
+    const t = t0 + ((t1 - t0) * i) / cols;
+    const a = env(t) * (0.45 + 0.55 * r()) * half;
+    const b = env(t) * (0.45 + 0.55 * r()) * half;
+    const x = (x0 + i * step).toFixed(1);
+    d += `M${x} ${(mid - Math.max(0.7, a)).toFixed(1)}V${(mid + Math.max(0.7, b)).toFixed(1)}`;
+  }
+  return d;
+}
+function sampleAt(t) {
+  return env(t) * (0.62 * Math.sin(2 * Math.PI * 110 * t) + 0.26 * Math.sin(2 * Math.PI * 220 * t + 1.1) + 0.12 * Math.sin(2 * Math.PI * 440 * t + 2.3));
+}
+function envelopePath(cols, t0, t1, mid, half, seed, w) {
+  const r = lcg(seed), top = [], bot = [];
+  for (let i = 0; i <= cols; i++) {
+    const t = t0 + ((t1 - t0) * i) / cols, x = ((w * i) / cols).toFixed(1);
+    const a = env(t) * (0.6 + 0.4 * r()) * half;
+    top.push(`${x} ${(mid - a).toFixed(1)}`);
+    bot.push(`${x} ${(mid + a * 0.92).toFixed(1)}`);
+  }
+  return `M${top.join('L')}L${bot.reverse().join('L')}Z`;
+}
+function gridPath(w, h, step) {
+  let d = '';
+  for (let x = step; x < w; x += step) d += `M${x} 0V${h}`;
+  return d;
+}
+
+class Component extends DCLogic {
+  state = { pos: 5.2, playing: true, track: true, freeScroll: 0 };
+
+  componentDidMount() {
+    this.last = performance.now();
+    const tick = (t) => {
+      const dt = Math.min(0.1, (t - this.last) / 1000);
+      this.last = t;
+      if (this.state.playing) this.setState((s) => ({ pos: (s.pos + dt) % DUR }));
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this.raf); }
+
+  renderVals() {
+    // 1a — detail lane centred on bar 5, overview of the whole take
+    const aT0 = 8.2, aT1 = 12.5;
+    const selT0 = 8.571, selT1 = 10.714;
+    const aX = (t) => ((t - aT0) / (aT1 - aT0)) * 908;
+    const barTicks = [];
+    for (let b = 0; b <= BARS * 4; b++) {
+      const t = b * BEAT, x = aX(t);
+      if (x > -2 && x < 910) barTicks.push({ x: x.toFixed(1), h: b % 4 === 0 ? 216 : 10 });
+    }
+
+    // 1c — streaming lane, 176 px per second over the whole take
+    const PPS = 176, STREAM_W = DUR * PPS;
+    const pos = this.state.pos;
+    const headOffset = this.state.track ? pos * PPS - 454 : this.state.freeScroll;
+    const headX = 454 + (pos * PPS - headOffset - 454);
+    const barIdx = Math.floor(pos / (4 * BEAT));
+    const inT = 6.43, outT = 8.57;
+
+    const ladder = [
+      {
+        name: 'whole take', ratio: '940 smp / px', draw: 'min-max columns', h: 96, mid: 48, sw: 1, fill: 'none',
+        wave: peakPath(816, 0, DUR, 48, 40, 7, 2, 1), grid: gridPath(820, 96, 102),
+        lensX: 372, lensW: 96, lensA: 0.07, dots: [],
+      },
+      {
+        name: 'one bar', ratio: '64 smp / px', draw: 'filled envelope + edge', h: 96, mid: 48, sw: 1.2, fill: '#2c4257',
+        wave: envelopePath(200, 8.57, 10.71, 48, 40, 11, 820), grid: gridPath(820, 96, 102),
+        lensX: 300, lensW: 44, lensA: 0.07, dots: [],
+      },
+      {
+        name: 'oscilloscope', ratio: '0.4 smp / px', draw: 'polyline + samples', h: 116, mid: 58, sw: 1.4, fill: 'none',
+        wave: '', grid: gridPath(820, 116, 68), lensX: 0, lensW: 0, lensA: 0, dots: [],
+      },
+    ];
+    const oscPts = [], oscDots = [];
+    for (let i = 0; i <= 44; i++) {
+      const t = 9.14 + (i / SR) * 26;
+      const x = (i / 44) * 816 + 2, y = 58 - sampleAt(t) * 46;
+      oscPts.push(`${x.toFixed(1)} ${y.toFixed(1)}`);
+      oscDots.push({ x: x.toFixed(1), y: y.toFixed(1) });
+    }
+    ladder[2].wave = 'M' + oscPts.join('L');
+    ladder[2].dots = oscDots;
+
+    const ZOOM = [
+      { label: 'take', on: false }, { label: '4 bar', on: false }, { label: '1 bar', on: true },
+      { label: 'beat', on: false }, { label: '100 ms', on: false }, { label: '10 ms', on: false },
+      { label: '1 ms', on: false }, { label: '1:1', on: false },
+    ];
+
+    const tc = (s) => {
+      const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s % 1) * 100);
+      return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+    };
+
+    return {
+      mainPeaks: peakPath(908, aT0, aT1, 108, 96, 3, 0, 1),
+      overviewPeaks: peakPath(454, 0, DUR, 26, 22, 5, 1, 2),
+      selX: aX(selT0).toFixed(1), selX2: aX(selT1).toFixed(1),
+      selW: (aX(selT1) - aX(selT0)).toFixed(1),
+      barTicks,
+      winX: ((aT0 / DUR) * 908).toFixed(1),
+      winW: (((aT1 - aT0) / DUR) * 908).toFixed(1),
+      winHandle2: (((aT1 / DUR) * 908) - 4).toFixed(1),
+      ovPlay: ((10.2 / DUR) * 908).toFixed(1),
+
+      ladder,
+      zoomRail: ZOOM.map((z) => ({
+        label: z.label, fg: z.on ? '#f5c66a' : '#5c6f82',
+        bar: z.on ? '#f5c66a' : '#2b3a4a', w: z.on ? 20 : 12,
+      })),
+
+      streamPeaks: peakPath(Math.round(STREAM_W / 2), 0, DUR, 92, 82, 9, 0, 2),
+      streamT: `translate(${(-headOffset).toFixed(1)} 0)`,
+      barX: (barIdx * 4 * BEAT * PPS).toFixed(1), barW: (4 * BEAT * PPS).toFixed(1),
+      selAX: (inT * PPS).toFixed(1), selAX2: (outT * PPS).toFixed(1),
+      selAW: ((outT - inT) * PPS).toFixed(1),
+      headA: this.state.track ? 1 : 0.18,
+      ghostX: headX.toFixed(1), ghostA: this.state.track ? 0 : 1,
+      showReturn: !this.state.track && (headX < 0 || headX > 908),
+      miniPeaks: peakPath(454, 0, DUR, 17, 14, 5, 1, 2),
+      miniWinX: ((headOffset / STREAM_W) * 908).toFixed(1),
+      miniWinW: ((908 / STREAM_W) * 908).toFixed(1),
+      miniPlay: ((pos / DUR) * 908).toFixed(1),
+      timecode: tc(pos), barNo: barIdx + 1,
+      inSmp: Math.round(inT * SR).toLocaleString('en-US').replace(/,/g, ' '),
+      outSmp: Math.round(outT * SR).toLocaleString('en-US').replace(/,/g, ' '),
+      trackState: this.state.track ? 'on' : 'off',
+      trackBg: this.state.track ? '#20180a' : '#141c26',
+      trackFg: this.state.track ? '#ffc861' : '#6b7d90',
+      trackBorder: this.state.track ? '#4a3c18' : '#2c3a49',
+      playLabel: this.state.playing ? 'stop' : 'play',
+      toggleTrack: () => this.setState((s) => ({ track: !s.track, freeScroll: s.pos * PPS - 454 })),
+      togglePlay: () => this.setState((s) => ({ playing: !s.playing })),
+      reTrack: () => this.setState({ track: true }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

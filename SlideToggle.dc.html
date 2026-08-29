@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="{{ viewBox }}" width="{{ w }}" height="{{ h }}" onClick="{{ onPress }}" style="display:block;cursor:pointer">
+  <rect x="0" y="0" width="100" height="{{ vh }}" fill="{{ panel }}"></rect>
+  <sc-if value="{{ hasLeft }}" hint-placeholder-val="{{ false }}">
+    <g transform="{{ leftT }}" fill="none" stroke="{{ glyphColor }}" stroke-width="2.2" stroke-linejoin="miter" stroke-linecap="butt">
+      <path d="{{ leftPath }}"></path>
+    </g>
+  </sc-if>
+  <sc-if value="{{ hasRight }}" hint-placeholder-val="{{ false }}">
+    <g transform="{{ rightT }}" fill="none" stroke="{{ glyphColor }}" stroke-width="2.2" stroke-linejoin="miter" stroke-linecap="butt">
+      <path d="{{ rightPath }}"></path>
+    </g>
+  </sc-if>
+  <rect x="{{ hx }}" y="{{ hy }}" width="{{ hw }}" height="{{ hh }}" rx="1.6" fill="#0f0f10"></rect>
+  <rect x="{{ wellX }}" y="{{ wellY }}" width="{{ wellW }}" height="{{ wellH }}" fill="#1d1d1f"></rect>
+  <g transform="{{ knobT }}">
+    <rect x="1.5" y="2" width="{{ knobW }}" height="{{ knobH }}" rx="1.2" fill="#000000" opacity="0.45"></rect>
+    <rect x="0" y="0" width="{{ knobW }}" height="{{ knobH }}" rx="1.2" fill="{{ knobFill }}" stroke="#0a0a0b" stroke-width="1"></rect>
+    <rect x="0" y="0" width="{{ knobW }}" height="{{ knobTop }}" rx="1.2" fill="#ffffff" opacity="{{ knobHl }}"></rect>
+    <g stroke="{{ ridgeColor }}" stroke-width="{{ ridgeW }}">
+      <sc-for list="{{ ridges }}" as="r" hint-placeholder-count="4">
+        <line x1="{{ r.x }}" y1="{{ r.y1 }}" x2="{{ r.x }}" y2="{{ r.y2 }}"></line>
+      </sc-for>
+    </g>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:190,&quot;height&quot;:80},&quot;value&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1,&quot;min&quot;:0,&quot;max&quot;:3,&quot;tsType&quot;:&quot;number&quot;},&quot;positions&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:2,&quot;max&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;left&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;saw&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;saw&quot;,&quot;square&quot;,&quot;tri&quot;,&quot;pulse&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;right&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;square&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;saw&quot;,&quot;square&quot;,&quot;tri&quot;,&quot;pulse&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;panel&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#b9bcbc&quot;,&quot;options&quot;:[&quot;#b9bcbc&quot;,&quot;#6d7a85&quot;,&quot;#39434b&quot;,&quot;#d6d4cf&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:150,&quot;min&quot;:40,&quot;max&quot;:420,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:52,&quot;min&quot;:16,&quot;max&quot;:160,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;onPress&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const GLYPH = {
+  saw: 'M2 15L7 6L7 15L12 6L12 15L17 6',
+  square: 'M2 15L2 7L7 7L7 15L12 15L12 7L17 7L17 15',
+  tri: 'M2 15L6.5 6L11 15L15.5 6L18 11',
+  pulse: 'M2 15L5 15L5 7L8 7L8 15L13 15L13 7L16 7L16 15',
+  none: '',
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const w = Number(this.props.w ?? 150);
+    const h = Number(this.props.h ?? 52);
+    const vh = Math.round((100 * h) / w);
+    const positions = Math.max(2, Number(this.props.positions ?? 2));
+    const value = Math.max(0, Math.min(positions - 1, Number(this.props.value ?? 0)));
+    const disabled = !!this.props.disabled;
+    const left = this.props.left ?? 'none';
+    const right = this.props.right ?? 'none';
+    const hasLeft = left !== 'none', hasRight = right !== 'none';
+
+    const gx = 22;
+    const hx = hasLeft ? gx : 3;
+    const hRight = hasRight ? 100 - gx : 97;
+    const hw = hRight - hx;
+    const hh = vh * 0.72, hy = (vh - hh) / 2;
+
+    const inset = Math.max(1.6, vh * 0.06);
+    const wellX = hx + inset, wellY = hy + inset;
+    const wellW = hw - inset * 2, wellH = hh - inset * 2;
+    const knobW = wellW / positions, knobH = wellH;
+
+    const g = 20, gs = (vh * 0.62) / 20;
+    return {
+      w, h, vh, viewBox: `0 0 100 ${vh}`, panel: this.props.panel ?? '#b9bcbc',
+      hasLeft, hasRight, leftPath: GLYPH[left] ?? '', rightPath: GLYPH[right] ?? '',
+      glyphColor: disabled ? '#8b8e8e' : '#232526',
+      leftT: `translate(1 ${(vh - g * gs) / 2}) scale(${gs})`,
+      rightT: `translate(${100 - gx + 4} ${(vh - g * gs) / 2}) scale(${gs})`,
+      hx, hy, hw, hh, wellX, wellY, wellW, wellH,
+      knobT: `translate(${wellX + value * knobW} ${wellY})`,
+      knobW, knobH, knobTop: knobH * 0.16,
+      knobFill: disabled ? '#3a3c3d' : '#2c2e2f',
+      knobHl: disabled ? 0.05 : 0.12,
+      ridgeColor: disabled ? '#54585a' : '#6a6e70',
+      ridgeW: Math.max(0.8, knobW * 0.055),
+      ridges: [0.26, 0.44, 0.62, 0.8].map((f) => ({
+        x: Math.round(knobW * f * 10) / 10, y1: knobH * 0.14, y2: knobH * 0.86,
+      })),
+      onPress: this.props.onPress,
+    };
+  }
+}
+</script>
+</body>
+</html>

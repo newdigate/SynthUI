@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<svg viewBox="0 0 100 100" width="{{ px }}" height="{{ px }}" style="display:block">
+  <sc-if value="{{ wellIsRing }}" hint-placeholder-val="{{ true }}">
+    <circle cx="50" cy="50" r="39" fill="{{ wellFill }}" stroke="{{ wellStroke }}" stroke-width="{{ wellW }}"></circle>
+  </sc-if>
+  <sc-if value="{{ wellIsArc }}" hint-placeholder-val="{{ false }}">
+    <g>
+      <circle cx="50" cy="50" r="39" fill="{{ wellFill }}"></circle>
+      <path d="{{ trackPath }}" fill="none" stroke="{{ wellStroke }}" stroke-width="{{ trackW }}" stroke-linecap="round"></path>
+    </g>
+  </sc-if>
+  <g transform="{{ rot }}">
+    <sc-for list="{{ paths }}" as="p" hint-placeholder-count="3">
+      <path d="{{ p.d }}" fill="{{ p.fill }}" stroke="{{ p.stroke }}" stroke-width="{{ p.sw }}" stroke-linejoin="round"></path>
+    </sc-for>
+  </g>
+</svg>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:160,&quot;height&quot;:160},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;notch&quot;,&quot;options&quot;:[&quot;notch&quot;,&quot;split&quot;,&quot;baton&quot;,&quot;crescent&quot;,&quot;facet&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;light&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;angle&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0,&quot;min&quot;:-360,&quot;max&quot;:360,&quot;unit&quot;:&quot;°&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:120,&quot;min&quot;:20,&quot;max&quot;:320,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;idle&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;active&quot;,&quot;focus&quot;,&quot;disabled&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;endless&quot;,&quot;options&quot;:[&quot;endless&quot;,&quot;bounded&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#fcfbf6&quot;,&quot;options&quot;:[&quot;#fcfbf6&quot;,&quot;#ffd24a&quot;,&quot;#5be0a0&quot;,&quot;#ff6a52&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;min&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-150,&quot;tsType&quot;:&quot;number&quot;},&quot;max&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:150,&quot;tsType&quot;:&quot;number&quot;}}">
+const D = Math.PI / 180;
+const f = (n) => Math.round(n * 100) / 100;
+const P = (r, th) => [f(50 + r * Math.sin(th * D)), f(50 - r * Math.cos(th * D))];
+const dot = (r, cx, cy) => `M${f(cx)} ${f(cy - r)}A${r} ${r} 0 1 1 ${f(cx - 0.01)} ${f(cy - r)}Z`;
+const ring = (r0, r1, a1, a2) => {
+  const big = Math.abs(a2 - a1) > 180 ? 1 : 0;
+  const [ox1, oy1] = P(r1, a1), [ox2, oy2] = P(r1, a2);
+  const [ix2, iy2] = P(r0, a2), [ix1, iy1] = P(r0, a1);
+  return `M${ox1} ${oy1}A${r1} ${r1} 0 ${big} 1 ${ox2} ${oy2}L${ix2} ${iy2}A${r0} ${r0} 0 ${big} 0 ${ix1} ${iy1}Z`;
+};
+const half = (r, a) => {
+  const [x1, y1] = P(r, a), [x2, y2] = P(r, a + 180);
+  return `M${x1} ${y1}A${r} ${r} 0 0 1 ${x2} ${y2}Z`;
+};
+const poly = (pts) => 'M' + pts.map((p) => p.join(' ')).join('L') + 'Z';
+const arcPath = (r, a1, a2) => {
+  const [x1, y1] = P(r, a1), [x2, y2] = P(r, a2);
+  return `M${x1} ${y1}A${r} ${r} 0 ${Math.abs(a2 - a1) > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+};
+
+const THEME = {
+  light: {
+    well: '#dcdce6', wellStroke: '#b6b8cc',
+    body: '#282b60', inner: '#333871', index: '#fcfbf6',
+    bodyActive: '#31356f', innerActive: '#3d4283',
+    bodyOff: '#9a9cae', innerOff: '#a6a8b8', indexOff: '#dcdce6', wellOff: '#e4e4ea',
+  },
+  dark: {
+    well: '#14141c', wellStroke: '#34344a',
+    body: '#3c4176', inner: '#4a5090', index: '#ffd24a',
+    bodyActive: '#464c88', innerActive: '#565da4',
+    bodyOff: '#2a2a36', innerOff: '#32323f', indexOff: '#55555f', wellOff: '#101016',
+  },
+};
+
+const VARIANTS = {
+  notch(T) {
+    return [
+      { d: dot(36, 50, 50), fill: T.body },
+      { d: dot(27, 50, 50), fill: T.inner },
+      { d: ring(16, 36, -8, 8), fill: T.index },
+    ];
+  },
+  split(T) {
+    return [
+      { d: half(36, 42), fill: '#e7e7f1' },
+      { d: half(36, 222), fill: T.body },
+      { d: ring(28, 36, -13, 13), fill: '#ffd24a' },
+    ];
+  },
+  baton(T) {
+    return [
+      { d: dot(36, 50, 50), fill: '#4a4f92' },
+      { d: 'M44 20A6 6 0 0 1 56 20L56 80A6 6 0 0 1 44 80Z', fill: '#e7e7f1' },
+      { d: dot(4.6, 50, 27), fill: '#1b1d45' },
+    ];
+  },
+  crescent(T) {
+    return [
+      { d: dot(34, 50, 50), fill: '#fcfbf6', stroke: '#1b1d45', sw: 2.4 },
+      { d: ring(21, 30, -107, 107), fill: T.body },
+      { d: dot(4, 50, 25.5), fill: '#1b1d45' },
+    ];
+  },
+  facet(T) {
+    const n = 8, r = 36;
+    const v = Array.from({ length: n }, (_, i) => P(r, (i * 360) / n + 22.5));
+    const tones = ['#5b61a8', '#4a4f92', '#3a3f7d', '#333871', '#3a3f7d', '#4a4f92', '#5b61a8', '#6a70b8'];
+    const out = v.map((_, i) => ({ d: poly([[50, 50], v[i], v[(i + 1) % n]]), fill: tones[i] }));
+    out.push({ d: ring(20, 36, -22.5, 22.5), fill: T.index });
+    return out;
+  },
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const px = Number(this.props.size ?? 120);
+    const angle = Number(this.props.angle ?? 0);
+    const variant = this.props.variant ?? 'notch';
+    const theme = this.props.theme === 'dark' ? 'dark' : 'light';
+    const state = this.props.state ?? 'idle';
+    const mode = this.props.mode ?? 'endless';
+    const base = THEME[theme];
+    const off = state === 'disabled';
+    const hot = state === 'active';
+
+    const T = {
+      body: off ? base.bodyOff : hot ? base.bodyActive : base.body,
+      inner: off ? base.innerOff : hot ? base.innerActive : base.inner,
+      index: off ? base.indexOff : (this.props.accent ?? base.index),
+    };
+
+    const min = Number(this.props.min ?? -150), max = Number(this.props.max ?? 150);
+    return {
+      px, rot: `rotate(${angle} 50 50)`,
+      wellIsRing: mode !== 'bounded', wellIsArc: mode === 'bounded',
+      wellFill: off ? base.wellOff : base.well,
+      wellStroke: state === 'focus' ? base.index : base.wellStroke,
+      wellW: state === 'focus' ? 3 : 1.6,
+      trackPath: arcPath(43, min, max), trackW: 3,
+      paths: (VARIANTS[variant] ?? VARIANTS.notch)(T).map((p) => ({
+        d: p.d, fill: p.fill, stroke: p.stroke ?? 'none', sw: p.sw ?? 0,
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

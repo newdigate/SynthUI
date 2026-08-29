@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:56px 48px 80px;display:flex;flex-direction:column;gap:28px;align-items:center">
+
+  <div style="width:100%;max-width:1120px;display:flex;flex-direction:column;gap:14px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Screen · vg_lite · sequencer page</div>
+    <h1 style="margin:0;font-size:38px;font-weight:600;letter-spacing:-0.02em;line-height:1.1">Piano roll</h1>
+    <p style="margin:0;font-size:16px;line-height:1.55;color:#4c4f6b;max-width:72ch">Time runs left to right, pitch bottom to top across the full 88 keys. Drag or wheel on the roll to scroll time; drag or wheel on the key gutter to scroll pitch. Both are one translate on a static group — no redraw, no re-authored paths.</p>
+  </div>
+
+  <div style="background:#17171c;border:1px solid #2a2a30;border-radius:12px;padding:16px;box-shadow:0 18px 40px rgba(20,20,35,0.18);width:100%;max-width:1120px">
+    <div style="background:#0d0d12;border-radius:6px;overflow:hidden;display:flex;flex-direction:column">
+
+      <div style="display:flex;align-items:center;gap:18px;padding:12px 16px;background:#12121a;border-bottom:1px solid #22222e;flex-wrap:wrap">
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ togglePlay }}" style="width:44px;height:36px;display:flex;align-items:center;justify-content:center;border:1px solid #2e2e3c;border-radius:4px;background:{{ playBg }};cursor:pointer;padding:0">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="{{ playIcon }}" fill="{{ playFg }}"></path></svg>
+          </button>
+          <button onClick="{{ rewind }}" style="width:44px;height:36px;display:flex;align-items:center;justify-content:center;border:1px solid #2e2e3c;border-radius:4px;background:#191922;cursor:pointer;padding:0">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 1h2v12H2zM13 1v12L5 7z" fill="#8a8ea8"></path></svg>
+          </button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#5e6280">bar</span>
+          <dc-import name="SevenSegment" text="{{ barBeat }}" size="{{ 30 }}" accent="blue" hint-size="130px,32px"></dc-import>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#5e6280">bpm</span>
+          <dc-import name="SevenSegment" text="{{ bpmText }}" size="{{ 30 }}" accent="amber" hint-size="100px,32px"></dc-import>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:18px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#5e6280">follow</span>
+            <div style="display:flex;border:1px solid #2e2e3c;border-radius:4px;overflow:hidden">
+              <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+                <button onClick="{{ m.pick }}" style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 13px;border:0;border-right:1px solid #2e2e3c;cursor:pointer;background:{{ m.bg }};color:{{ m.fg }}">{{ m.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:#5e6280">zoom</span>
+            <div style="display:flex;border:1px solid #2e2e3c;border-radius:4px;overflow:hidden">
+              <button onClick="{{ zoomOut }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;width:34px;height:36px;border:0;border-right:1px solid #2e2e3c;background:#191922;color:#a8adc8;cursor:pointer">−</button>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;min-width:58px;display:flex;align-items:center;justify-content:center;background:#0f0f16;color:#8a8ea8">{{ zoomLabel }}</div>
+              <button onClick="{{ zoomIn }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;width:34px;height:36px;border:0;border-left:1px solid #2e2e3c;background:#191922;color:#a8adc8;cursor:pointer">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div ref="{{ wrapRef }}" onWheel="{{ onWheel }}" onMouseDown="{{ onDown }}" onMouseMove="{{ onMove }}" onMouseUp="{{ onUp }}" onMouseLeave="{{ onUp }}" onTouchStart="{{ onTouchStart }}" onTouchMove="{{ onTouchMove }}" onTouchEnd="{{ onUp }}" style="position:relative;height:436px;cursor:grab;user-select:none;overflow:hidden;touch-action:none">
+        <svg width="100%" height="436" style="display:block">
+          <defs>
+            <clipPath id="rollClip"><rect x="92" y="29" width="4000" height="407"></rect></clipPath>
+            <clipPath id="gutClip"><rect x="0" y="29" width="92" height="407"></rect></clipPath>
+          </defs>
+
+          <g clip-path="url(#rollClip)">
+            <g transform="{{ rollT }}">
+              <sc-for list="{{ lanes }}" as="l" hint-placeholder-count="88">
+                <rect x="0" y="{{ l.y }}" width="{{ l.w }}" height="11" fill="{{ l.fill }}"></rect>
+              </sc-for>
+              <sc-for list="{{ beatLines }}" as="b" hint-placeholder-count="24">
+                <rect x="{{ b.x }}" y="0" width="1" height="968" fill="#1c1c28"></rect>
+              </sc-for>
+              <sc-for list="{{ barLines }}" as="b" hint-placeholder-count="9">
+                <rect x="{{ b.x }}" y="0" width="1" height="968" fill="#2c2c3c"></rect>
+              </sc-for>
+              <sc-for list="{{ notes }}" as="n" hint-placeholder-count="91">
+                <rect x="{{ n.x }}" y="{{ n.y }}" width="{{ n.w }}" height="9" rx="2" fill="{{ n.fill }}"></rect>
+              </sc-for>
+            </g>
+          </g>
+
+          <rect x="0" y="0" width="100%" height="29" fill="#0d0d12"></rect>
+          <g transform="{{ rulerT }}">
+            <sc-for list="{{ barLines }}" as="b" hint-placeholder-count="9">
+              <rect x="{{ b.x }}" y="0" width="1" height="29" fill="#2c2c3c"></rect>
+            </sc-for>
+            <g font-family="IBM Plex Mono, monospace" font-size="11" fill="#6a6f8c">
+              <text x="{{ bx1 }}" y="19">1</text>
+              <text x="{{ bx2 }}" y="19">2</text>
+              <text x="{{ bx3 }}" y="19">3</text>
+              <text x="{{ bx4 }}" y="19">4</text>
+              <text x="{{ bx5 }}" y="19">5</text>
+              <text x="{{ bx6 }}" y="19">6</text>
+              <text x="{{ bx7 }}" y="19">7</text>
+              <text x="{{ bx8 }}" y="19">8</text>
+            </g>
+          </g>
+
+          <rect x="0" y="0" width="92" height="436" fill="#08080c"></rect>
+          <g clip-path="url(#gutClip)">
+            <g transform="{{ gutterT }}">
+              <sc-for list="{{ keys }}" as="k" hint-placeholder-count="88">
+                <rect x="10" y="{{ k.y }}" width="{{ k.w }}" height="10.4" fill="{{ k.fill }}"></rect>
+              </sc-for>
+              <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#5c5f74">
+                <text x="58" y="8.5">C8</text>
+                <text x="58" y="140.5">C7</text>
+                <text x="58" y="272.5">C6</text>
+                <text x="58" y="404.5">C5</text>
+                <text x="58" y="536.5">C4</text>
+                <text x="58" y="668.5">C3</text>
+                <text x="58" y="800.5">C2</text>
+                <text x="58" y="932.5">C1</text>
+              </g>
+            </g>
+          </g>
+
+          <rect x="86" y="{{ thumbY }}" width="3" height="{{ thumbH }}" rx="1.5" fill="#3a3a4c"></rect>
+          <rect x="91" y="0" width="1" height="436" fill="#2c2c3c"></rect>
+          <rect x="0" y="28" width="100%" height="1" fill="#22222e"></rect>
+
+          <rect x="{{ playX }}" y="0" width="1.5" height="436" fill="#ffc861"></rect>
+          <path d="{{ playFlag }}" fill="#ffc861"></path>
+        </svg>
+
+        <sc-if value="{{ offscreen }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ snapBack }}" style="position:absolute;right:14px;bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:9px 14px;border:1px solid #4a3c18;border-radius:4px;background:#20180a;color:#ffc861;cursor:pointer">↩ playhead</button>
+        </sc-if>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:18px;padding:10px 16px;background:#12121a;border-top:1px solid #22222e;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.06em;color:#5e6280">
+        <span>{{ modeNote }}</span>
+        <span style="margin-left:auto">88 keys · 8 bars · 4/4 · A minor</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="width:100%;max-width:1120px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:32px;font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+    <sc-for list="{{ spec }}" as="s" hint-placeholder-count="4">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="color:#22243c;font-weight:500">{{ s.a }}</div>
+        <div style="color:#5c5f7e;line-height:1.7">{{ s.b }}</div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;bpm&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:112,&quot;min&quot;:40,&quot;max&quot;:220,&quot;unit&quot;:&quot;bpm&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;centre&quot;,&quot;options&quot;:[&quot;centre&quot;,&quot;page&quot;,&quot;free&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;zoom&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:72,&quot;min&quot;:28,&quot;max&quot;:180,&quot;step&quot;:4,&quot;unit&quot;:&quot;px/beat&quot;,&quot;tsType&quot;:&quot;number&quot;}}">
+const LOW = 21, HIGH = 108, LANE = 11, GUT = 92, RULER = 29, VIEW_H = 407, BEATS = 32;
+const CONTENT_H = (HIGH - LOW + 1) * LANE;
+const MAX_Y = CONTENT_H - VIEW_H;
+const BLACK = [1, 3, 6, 8, 10];
+const ROOTS = [57, 57, 53, 53, 60, 55, 57, 57];
+const ARP = [0, 7, 12, 7, 0, 7, 12, 7];
+const MEL = [
+  [[0, 76, 1], [1, 74, 0.5], [1.5, 72, 0.5], [2, 74, 2]],
+  [[0, 72, 1], [1, 69, 1], [2, 71, 2]],
+  [[0, 77, 1], [1, 76, 0.5], [1.5, 74, 0.5], [2, 72, 2]],
+  [[0, 74, 1.5], [1.5, 72, 0.5], [2, 69, 2]],
+  [[0, 79, 1], [1, 77, 1], [2, 76, 2]],
+  [[0, 74, 0.5], [0.5, 76, 0.5], [1, 77, 1], [2, 79, 2]],
+  [[0, 81, 1], [1, 79, 0.5], [1.5, 77, 0.5], [2, 76, 1], [3, 74, 1]],
+  [[0, 72, 4]],
+];
+const SCORE = [];
+ROOTS.forEach((root, bar) => {
+  ARP.forEach((off, i) => SCORE.push({ p: root + off, s: bar * 4 + i * 0.5, d: 0.5, v: 0 }));
+  MEL[bar].forEach(([b, p, d]) => SCORE.push({ p, s: bar * 4 + b, d, v: 1 }));
+});
+
+class Component extends DCLogic {
+  state = { scrollX: 0, scrollY: 268, ppb: null, playing: true, pos: 0, mode: null, viewW: 1000, drag: null };
+  wrapRef = React.createRef();
+
+  componentDidMount() {
+    const measure = () => {
+      const el = this.wrapRef.current;
+      if (el && el.clientWidth && el.clientWidth !== this.state.viewW) this.setState({ viewW: el.clientWidth });
+    };
+    measure();
+    this.ro = new ResizeObserver(measure);
+    if (this.wrapRef.current) this.ro.observe(this.wrapRef.current);
+    this.last = performance.now();
+    const tick = (t) => {
+      const dt = Math.min(0.1, (t - this.last) / 1000);
+      this.last = t;
+      if (this.state.playing) {
+        const bpm = Number(this.props.bpm ?? 112);
+        this.setState((s) => ({ pos: (s.pos + dt * bpm / 60) % BEATS }));
+      }
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this.raf); if (this.ro) this.ro.disconnect(); }
+
+  ppb() { return this.state.ppb ?? Number(this.props.zoom ?? 72); }
+  mode() { return this.state.mode ?? (this.props.mode ?? 'centre'); }
+  clampY(y) { return Math.max(0, Math.min(MAX_Y, y)); }
+  onGutter(clientX) {
+    const el = this.wrapRef.current;
+    return !!el && clientX - el.getBoundingClientRect().left < GUT;
+  }
+
+  scrollFor(mode, pos, ppb, viewW) {
+    const w = viewW - GUT, contentW = BEATS * ppb;
+    if (mode === 'centre') return pos * ppb - w / 2;
+    if (mode === 'page') return Math.floor((pos * ppb) / w) * w;
+    return Math.max(-8, Math.min(this.state.scrollX, Math.max(0, contentW - w + 24)));
+  }
+
+  setZoom(f) {
+    const ppb = this.ppb(), next = Math.max(28, Math.min(180, Math.round(ppb * f)));
+    const w = this.state.viewW - GUT;
+    const anchor = this.scrollFor(this.mode(), this.state.pos, ppb, this.state.viewW) + w / 2;
+    this.setState({ ppb: next, scrollX: (anchor * next) / ppb - w / 2 });
+  }
+
+  renderVals() {
+    const ppb = this.ppb(), mode = this.mode(), pos = this.state.pos, viewW = this.state.viewW;
+    const contentW = BEATS * ppb;
+    const scrollX = this.scrollFor(mode, pos, ppb, viewW);
+    const scrollY = this.clampY(this.state.scrollY);
+    const playX = GUT + pos * ppb - scrollX;
+    const sounding = new Set();
+    SCORE.forEach((n) => { if (pos >= n.s && pos < n.s + n.d) sounding.add(n.p); });
+
+    const lanes = [], keys = [];
+    for (let m = HIGH; m >= LOW; m--) {
+      const y = (HIGH - m) * LANE;
+      const black = BLACK.includes(m % 12);
+      const on = sounding.has(m);
+      lanes.push({ y, w: contentW + 40, fill: m % 12 === 0 ? '#15151f' : black ? '#101017' : '#14141d' });
+      keys.push({ y: y + 0.3, w: black ? 44 : 72, fill: on ? '#ffc861' : black ? '#31313e' : '#c9c9c4' });
+    }
+
+    const beatLines = [], barLines = [], barX = [];
+    for (let b = 0; b <= BEATS; b++) {
+      const x = b * ppb;
+      if (b % 4 === 0) { barLines.push({ x }); if (b < BEATS) barX.push(x + 7); }
+      else beatLines.push({ x });
+    }
+
+    const notes = SCORE.map((n) => {
+      const on = pos >= n.s && pos < n.s + n.d;
+      return {
+        x: n.s * ppb + 1, y: (HIGH - n.p) * LANE + 1, w: Math.max(4, n.d * ppb - 2),
+        fill: on ? '#ffe0a0' : n.v ? '#7fa8e8' : '#48699e',
+      };
+    });
+
+    const bar = Math.floor(pos / 4) + 1, beat = Math.floor(pos % 4) + 1;
+    const MODES = [
+      { id: 'centre', label: 'centre', note: 'Centre — the playhead is pinned mid-screen and the score slides past it.' },
+      { id: 'page', label: 'page', note: 'Page — the playhead travels; the view jumps one screen when it reaches the edge.' },
+      { id: 'free', label: 'free', note: 'Free — scroll anywhere; the playhead keeps running and the chip snaps you back.' },
+    ];
+    const cur = MODES.find((m) => m.id === mode) ?? MODES[0];
+
+    const dragMove = (x, y) => {
+      const d = this.state.drag;
+      if (!d) return;
+      if (d.axis === 'y') this.setState({ scrollY: this.clampY(d.sy - (y - d.y)) });
+      else this.setState({ scrollX: d.sx - (x - d.x) });
+    };
+
+    return {
+      wrapRef: this.wrapRef,
+      lanes, keys, beatLines, barLines, notes,
+      bx1: barX[0], bx2: barX[1], bx3: barX[2], bx4: barX[3],
+      bx5: barX[4], bx6: barX[5], bx7: barX[6], bx8: barX[7],
+      rollT: `translate(${(GUT - scrollX).toFixed(1)} ${(RULER - scrollY).toFixed(1)})`,
+      gutterT: `translate(0 ${(RULER - scrollY).toFixed(1)})`,
+      rulerT: `translate(${(GUT - scrollX).toFixed(1)} 0)`,
+      thumbY: (RULER + (scrollY / CONTENT_H) * VIEW_H).toFixed(1),
+      thumbH: ((VIEW_H / CONTENT_H) * VIEW_H).toFixed(1),
+      playX: playX.toFixed(1),
+      playFlag: `M${(playX - 5).toFixed(1)} 0H${(playX + 5).toFixed(1)}L${playX.toFixed(1)} 9Z`,
+      offscreen: mode === 'free' && (playX < GUT + 4 || playX > viewW - 4),
+      barBeat: String(bar).padStart(2, ' ') + ':' + beat,
+      bpmText: String(Number(this.props.bpm ?? 112)),
+      zoomLabel: Math.round((ppb / 72) * 100) + '%',
+      playIcon: this.state.playing ? 'M2 1h4v12H2zM8 1h4v12H8z' : 'M2 1l11 6-11 6z',
+      playBg: this.state.playing ? '#20180a' : '#191922',
+      playFg: this.state.playing ? '#ffc861' : '#8a8ea8',
+      modeNote: cur.note,
+      modes: MODES.map((m) => ({
+        label: m.label,
+        bg: m.id === mode ? '#232336' : '#191922',
+        fg: m.id === mode ? '#cfd4f0' : '#6f7396',
+        pick: () => this.setState({ mode: m.id, scrollX: this.scrollFor(mode, pos, ppb, viewW) }),
+      })),
+      togglePlay: () => this.setState((s) => ({ playing: !s.playing })),
+      rewind: () => this.setState({ pos: 0, scrollX: 0 }),
+      zoomIn: () => this.setZoom(1.25),
+      zoomOut: () => this.setZoom(0.8),
+      snapBack: () => this.setState({ mode: 'centre' }),
+      onWheel: (e) => {
+        if (this.onGutter(e.clientX)) {
+          this.setState({ scrollY: this.clampY(scrollY + (e.deltaY || 0)) });
+        } else {
+          const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          this.setState({ mode: 'free', scrollX: scrollX + d });
+        }
+      },
+      onDown: (e) => {
+        const axis = this.onGutter(e.clientX) ? 'y' : 'x';
+        this.setState({ drag: { axis, x: e.clientX, y: e.clientY, sx: scrollX, sy: scrollY }, mode: axis === 'x' ? 'free' : mode });
+      },
+      onMove: (e) => dragMove(e.clientX, e.clientY),
+      onTouchStart: (e) => {
+        const t = e.touches[0];
+        const axis = this.onGutter(t.clientX) ? 'y' : 'x';
+        this.setState({ drag: { axis, x: t.clientX, y: t.clientY, sx: scrollX, sy: scrollY }, mode: axis === 'x' ? 'free' : mode });
+      },
+      onTouchMove: (e) => { const t = e.touches[0]; if (t) dragMove(t.clientX, t.clientY); },
+      onUp: () => { if (this.state.drag) this.setState({ drag: null }); },
+      spec: [
+        { a: 'range', b: '88 lanes, A0–C8. The viewport shows 37; pitch scrolls under a fixed ruler.' },
+        { a: 'scroll', b: 'Roll: drag or wheel for time. Key gutter: drag or wheel for pitch. Two clipped groups, two translates.' },
+        { a: 'follow', b: 'Centre pins the playhead, page jumps a screen at the edge, free hands scrolling to the user.' },
+        { a: 'colour', b: 'Bass #48699e, melody #7fa8e8, sounding #ffe0a0, playhead #ffc861 — flat fills only.' },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+<div style="min-height:100vh;background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:64px 56px 96px;display:flex;flex-direction:column;gap:64px">
+
+  <header style="display:flex;flex-direction:column;gap:18px;max-width:900px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Component sheet · vg_lite · 909-led-button · 16-step row</div>
+    <h1 style="margin:0;font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05">Step key with an LED window</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#4c4f6b;max-width:70ch">Ivory keycap sunk in a black bezel, a lozenge LED across the top third. Two colour treatments and a 2.5-unit vertical offset carry every state — the geometry never changes, so a 16-step row is one path set drawn sixteen times with a different fill pair.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px">
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">7 rects · 2 circles</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">1 linear gradient</span>
+      <span style="padding:6px 11px;border:1px solid #cdcdd8;border-radius:999px;color:#4c4f6b">press = translate, not redraw</span>
+    </div>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:0;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:6px;overflow:hidden">
+    <div style="background:#232326;padding:40px 44px 34px;display:flex;flex-direction:column;gap:26px">
+      <div style="display:flex;gap:30px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:12px;align-items:center">
+          <dc-import name="PanelButton" glyph="play" accent="green" on="{{ playing }}" w="{{ 70 }}" h="{{ 54 }}" onPress="{{ onPlay }}" hint-size="70px,54px"></dc-import>
+          <dc-import name="PanelButton" glyph="stop" accent="amber" on="{{ stopped }}" w="{{ 70 }}" h="{{ 54 }}" onPress="{{ onStop }}" hint-size="70px,54px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#8e8b84">step</span>
+          <dc-import name="SevenSegment" text="{{ stepText }}" size="{{ 40 }}" accent="red" hint-size="120px,44px"></dc-import>
+        </div>
+        <div style="display:flex;gap:9px">
+          <sc-for list="{{ colorPicks }}" as="c" hint-placeholder-count="4">
+            <button onClick="{{ c.pick }}" style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:8px 13px;border-radius:3px;cursor:pointer;border:1px solid #4a4a4d;background:{{ c.bg }};color:#f2f1ea">{{ c.name }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+          <div style="display:flex;gap:5px;padding:9px;background:#1a1a1c;border-radius:5px">
+            <sc-for list="{{ g.steps }}" as="s" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+                <dc-import name="LedButton" size="{{ 54 }}" lit="{{ s.lit }}" cue="{{ s.cue }}" color="{{ s.color }}" onPress="{{ s.toggle }}" hint-size="54px,54px"></dc-import>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:{{ s.labelColor }}">{{ s.n }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:18px 26px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6f7396">click any step · groups of four are the quarter-note grouping from the original faceplate</div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">01 · States</h2>
+      <span style="font-size:14px;color:#6f7396">Colour pairs and one 2.5-unit offset. Nothing resizes.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:24px">
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;border:1px solid #e0dfd5;border-radius:5px;overflow:hidden;background:#fbfaf5">
+          <div style="background:#232326;padding:28px;display:flex;justify-content:center">
+            <dc-import name="LedButton" size="{{ 96 }}" lit="{{ s.lit }}" pressed="{{ s.pressed }}" cue="{{ s.cue }}" disabled="{{ s.disabled }}" color="red" hint-size="96px,96px"></dc-import>
+          </div>
+          <div style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:7px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">{{ s.name }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#4c4f6b">{{ s.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:26px">
+    <div style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #dedcd1;padding-bottom:12px">
+      <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">02 · Sizes &amp; LED colours</h2>
+      <span style="font-size:14px;color:#6f7396">Below 34px the LED dots drop out; everything else holds.</span>
+    </div>
+    <div style="background:#232326;border-radius:5px;padding:36px 40px;display:flex;gap:60px;flex-wrap:wrap;align-items:flex-end">
+      <div style="display:flex;gap:20px;align-items:flex-end">
+        <sc-for list="{{ sizes }}" as="z" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+            <dc-import name="LedButton" size="{{ z.px }}" lit="{{ true }}" color="red" hint-size="60px,60px"></dc-import>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8e8b84">{{ z.px }} px</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:16px;align-items:flex-end">
+        <sc-for list="{{ colorSwatches }}" as="c" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+            <dc-import name="LedButton" size="{{ 76 }}" lit="{{ true }}" color="{{ c.name }}" hint-size="76px,76px"></dc-import>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8e8b84">{{ c.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">03 · Draw list</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,0.7fr);font-family:'IBM Plex Mono',monospace;font-size:12.5px">
+        <sc-for list="{{ drawList }}" as="r" hint-placeholder-count="7">
+          <div style="padding:11px 12px 11px 0;border-bottom:1px solid #e4e2d7;color:#22243c;font-weight:500">{{ r.a }}</div>
+          <div style="padding:11px 12px;border-bottom:1px solid #e4e2d7;color:#5c5f7e">{{ r.b }}</div>
+          <div style="padding:11px 0;border-bottom:1px solid #e4e2d7;color:#5c5f7e;text-align:right">{{ r.c }}</div>
+        </sc-for>
+      </div>
+      <pre style="margin:0;white-space:pre;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#33365a;background:#fbfaf5;border:1px solid #e0dfd5;border-radius:4px;padding:16px 18px;overflow-x:auto">{{ snippet }}</pre>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div style="border-bottom:1px solid #dedcd1;padding-bottom:12px">
+        <h2 style="margin:0;font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.14em;text-transform:uppercase;font-weight:600">04 · Replaces</h2>
+      </div>
+      <img src="crop-909-strip.png" alt="original 909 step button row" style="width:100%;image-rendering:pixelated;border-radius:4px"></img>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#4c4f6b">
+        <div>photographed faceplate · 78×108 per key</div>
+        <div>2 states · one size · baked shadows</div>
+        <div style="color:#22243c;font-weight:500;margin-top:10px">vector · 1 key · 4 LED hues · 5 states</div>
+        <div style="color:#22243c;font-weight:500">any size · numbering owned by the row</div>
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:#4c4f6b">Kept: the sunk bezel, the ivory cap warming toward the bottom, the LED sitting proud of the cap face, and the two moulding dots. Dropped: the photographic grain and the engraved strip — step numbers belong to the row, so a 32-step row renumbers without new art.</div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1200},&quot;color&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;red&quot;,&quot;options&quot;:[&quot;red&quot;,&quot;amber&quot;,&quot;green&quot;,&quot;blue&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+const SWATCH = { red: '#ff3b30', amber: '#ffa41f', green: '#4be060', blue: '#5aa8ff' };
+
+class Component extends DCLogic {
+  state = {
+    playing: true, cur: 0, color: 'red',
+    on: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+  };
+  componentDidMount() { this.t = setInterval(() => { if (this.state.playing) this.setState((s) => ({ cur: (s.cur + 1) % 16 })); }, 190); }
+  componentWillUnmount() { clearInterval(this.t); }
+
+  renderVals() {
+    const s = this.state;
+    const steps = s.on.map((lit, i) => ({
+      n: i + 1, lit, cue: s.playing && i === s.cur, color: s.color,
+      labelColor: i === s.cur ? '#f2f1ea' : '#8e8b84',
+      toggle: () => this.setState((p) => { const on = p.on.slice(); on[i] = !on[i]; return { on }; }),
+    }));
+    return {
+      playing: s.playing, stopped: !s.playing,
+      stepText: String(s.cur + 1).padStart(2, ' '),
+      groups: [0, 1, 2, 3].map((g) => ({ steps: steps.slice(g * 4, g * 4 + 4) })),
+      onPlay: () => this.setState({ playing: true }),
+      onStop: () => this.setState({ playing: false, cur: 0 }),
+      colorPicks: Object.keys(SWATCH).map((n) => ({ name: n, bg: SWATCH[n] + '33', pick: () => this.setState({ color: n }) })),
+      colorSwatches: Object.keys(SWATCH).map((n) => ({ name: n })),
+      sizes: [34, 52, 76, 110].map((px) => ({ px })),
+      states: [
+        { name: 'off', lit: false, pressed: false, cue: false, disabled: false, note: 'LED at its dark fill — the window still reads as glass, never as a hole.' },
+        { name: 'lit', lit: true, pressed: false, cue: false, disabled: false, note: 'Step armed. Fill swaps and a 10-wide stroke halo spills past the lozenge.' },
+        { name: 'held', lit: true, pressed: true, cue: false, disabled: false, note: 'Cap and LED translate 2.5 units down, highlight drops to 28% α. No resize.' },
+        { name: 'cue', lit: false, pressed: false, cue: true, disabled: false, note: 'Playhead on an unarmed step: bezel stroke turns accent and thickens to 3.5.' },
+        { name: 'cue + lit', lit: true, pressed: false, cue: true, disabled: false, note: 'Both at once — the two signals live on different parts, so they never collide.' },
+        { name: 'disabled', lit: false, pressed: false, cue: false, disabled: true, note: 'Cap desaturates, LED goes neutral grey. Reserved for locked patterns.' },
+      ],
+      drawList: [
+        { a: 'bezel', b: 'rounded rect r16 + stroke', c: 'cue' },
+        { a: 'well', b: 'rounded rect r13, 90% α', c: 'static' },
+        { a: 'cap', b: 'rounded rect r11 + linear grad', c: 'press' },
+        { a: 'cap highlight', b: 'rounded rect r5.5, 55% α', c: 'press' },
+        { a: 'led', b: 'rounded rect r3.5, 2 fills', c: 'value' },
+        { a: 'led bloom', b: 'stroke w10 at 38% α', c: 'value' },
+        { a: 'moulding dots', b: '2 × circle r1.7, 22% α', c: 'static' },
+      ],
+      snippet:
+        'vg_lite_identity(&m);\n' +
+        'vg_lite_translate(x, y + (held?2.5f:0), &m);\n' +
+        'vg_lite_scale(s, s, &m);\n\n' +
+        'vg_lite_draw(rt, &bezel, ..., &m,\n' +
+        '    cue ? ACCENT : BEZEL);\n' +
+        'vg_lite_draw_gradient(rt, &cap, ..., &m,\n' +
+        '    held ? grad_down : grad_up);\n' +
+        'vg_lite_draw(rt, &led, ..., &m,\n' +
+        '    lit ? LED_ON : LED_OFF);\n' +
+        'if (lit) stroke_pass(rt, &led, &m,\n' +
+        '    LED_ON, 10, 0.38f);',
+    };
+  }
+}
+</script>
+</body>
+</html>

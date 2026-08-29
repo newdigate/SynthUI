@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#f2f1ea; }
+    a { color:#4a51a8; text-decoration:none; border-bottom:1px solid #b9bce0; }
+    a:hover { color:#282b60; }
+    * { text-wrap:pretty; }
+  </style>
+</helmet>
+
+<section style="background:#f2f1ea;color:#22243c;font-family:'IBM Plex Sans',Helvetica,sans-serif;padding:52px 48px 80px;display:flex;flex-direction:column;gap:30px">
+  <div style="display:flex;flex-direction:column;gap:11px;max-width:86ch">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6f7396">Direction 1a · pattern editor</div>
+    <h1 style="margin:0;font-size:38px;font-weight:600;letter-spacing:-0.02em;line-height:1.06">Tracker pattern grid</h1>
+    <p style="margin:0;font-size:15.5px;line-height:1.55;color:#4c4f6b">Twelve channels, 64 rows, eight channels visible. The cursor row is frozen at a fixed y and the pattern streams under it, so vertical scroll is one integer row offset — no cell re-layout, one whole-lane blit. Horizontal scroll is channel-quantised: the view snaps channel to channel so clip rects stay on cell boundaries and a channel is never half-cut.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 22px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#6f7396;padding-top:2px">
+      <span><b style="color:#3a3d5c">drag lane</b> scroll rows</span>
+      <span><b style="color:#3a3d5c">wheel</b> scroll · <b style="color:#3a3d5c">shift-wheel</b> channels</span>
+      <span><b style="color:#3a3d5c">click cell</b> place cursor</span>
+      <span><b style="color:#3a3d5c">arrows</b> move cursor</span>
+      <span><b style="color:#3a3d5c">space</b> play / stop</span>
+      <span><b style="color:#3a3d5c">click ch header</b> mute</span>
+    </div>
+  </div>
+
+  <div style="background:#101319;border:1px solid #232833;border-radius:11px;padding:13px;width:fit-content">
+    <div style="background:#01040a;border:1px solid #143a72;border-radius:4px;overflow:hidden;font-family:'IBM Plex Mono',monospace;width:fit-content">
+
+      <div style="display:flex;align-items:center;gap:16px;padding:8px 12px;background:#061027;border-bottom:1px solid #143a72;font-size:10.5px;letter-spacing:0.06em;color:#5f83b8">
+        <div onClick="{{ togglePlay }}" style="display:flex;align-items:center;gap:6px;padding:3px 9px;background:#123a78;border:1px solid #2f6fd0;color:#cfe2ff;cursor:pointer;user-select:none" style-hover="background:#1a4c96">
+          <span style="font-size:9px">{{ playGlyph }}</span>
+          <span>{{ playLabel }}</span>
+        </div>
+        <span style="color:#cfe2ff">PTN 07</span>
+        <span>64 ROWS · 12 CH</span>
+        <span>SPD 06 · BPM {{ bpm }}</span>
+        <span style="color:#f5c66a">EDIT · ROW {{ cursorHex }} · CH {{ cursorChHex }} · {{ fieldName }}</span>
+        <span style="margin-left:auto;color:#3f6398">{{ costNote }}</span>
+      </div>
+
+      <div style="position:relative" onMouseDown="{{ onLaneDown }}" ref="{{ laneRef }}">
+        <div style="display:flex;align-items:stretch">
+
+          <div style="display:flex;flex-direction:column;background:#02060f;border-right:1px solid #143a72;flex:none;width:34px">
+            <div style="height:19px;background:#061027;border-bottom:1px solid #123262"></div>
+            <sc-for list="{{ gutter }}" as="g" hint-placeholder-count="22">
+              <div style="height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">
+                <sc-if value="{{ g.beat }}" hint-placeholder-val="{{ true }}">
+                  <span style="color:#9dc0f0">{{ g.hex }}</span>
+                </sc-if>
+                <sc-if value="{{ g.notBeat }}" hint-placeholder-val="{{ false }}">
+                  <span style="color:#40679c">{{ g.hex }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex:none">
+            <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="8">
+              <div style="flex:none;width:120px;border-right:1px solid #123262;display:flex;flex-direction:column" onClick="{{ ch.onCellClick }}">
+                <div onMouseDown="{{ ch.onMute }}" style="height:19px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#061027;border-bottom:1px solid #123262;font-size:10px;letter-spacing:0.08em;color:#5f83b8;cursor:pointer;user-select:none" style-hover="background:#0b1f45">
+                  <span style="color:#cfe2ff;font-weight:600">{{ ch.num }}</span>
+                  <span>{{ ch.name }}</span>
+                  <span style="margin-left:auto;color:#e0684f">{{ ch.muteTag }}</span>
+                </div>
+                <sc-for list="{{ ch.cells }}" as="c" hint-placeholder-count="22">
+                  <div style="height:18px">
+                    <sc-if value="{{ c.on }}" hint-placeholder-val="{{ true }}">
+                      <div style="height:18px;display:flex;align-items:center;gap:7px;padding:0 8px;font-size:12px;letter-spacing:0.02em">
+                        <span style="width:26px;color:#dbe9ff;font-weight:500">{{ c.note }}</span>
+                        <span style="width:16px;color:#f5c66a">{{ c.inst }}</span>
+                        <span style="width:16px;color:#8fd07a">{{ c.vol }}</span>
+                        <span style="width:24px;color:#6fb6e8">{{ c.fx }}</span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ c.off }}" hint-placeholder-val="{{ false }}">
+                      <div style="height:18px;display:flex;align-items:center;gap:7px;padding:0 8px;font-size:12px;letter-spacing:0.02em;color:#1f3a63">
+                        <span style="width:26px">{{ c.note }}</span>
+                        <span style="width:16px">{{ c.inst }}</span>
+                        <span style="width:16px">{{ c.vol }}</span>
+                        <span style="width:24px">{{ c.fx }}</span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ twinGutters }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;background:#02060f;border-left:1px solid #143a72;flex:none;width:34px">
+              <div style="height:19px;background:#061027;border-bottom:1px solid #123262"></div>
+              <sc-for list="{{ gutter }}" as="g" hint-placeholder-count="22">
+                <div style="height:18px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">
+                  <sc-if value="{{ g.beat }}" hint-placeholder-val="{{ true }}">
+                    <span style="color:#9dc0f0">{{ g.hex }}</span>
+                  </sc-if>
+                  <sc-if value="{{ g.notBeat }}" hint-placeholder-val="{{ false }}">
+                    <span style="color:#40679c">{{ g.hex }}</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-for list="{{ muteOverlays }}" as="m" hint-placeholder-count="0">
+          <div style="position:absolute;top:20px;bottom:0;width:121px;background:#01040a;opacity:0.68;pointer-events:none;left:{{ m.x }}px"></div>
+        </sc-for>
+
+        <div style="position:absolute;left:0;right:0;top:218px;height:18px;background:#1b4d9e;opacity:0.42;pointer-events:none"></div>
+        <div style="position:absolute;left:0;right:0;top:217px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+        <div style="position:absolute;left:0;right:0;top:236px;height:1px;background:#4d8fe8;pointer-events:none"></div>
+        <div style="position:absolute;top:219px;height:16px;border:1px solid #f5c66a;pointer-events:none;left:{{ curX }}px;width:{{ curW }}px"></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#061027;border-top:1px solid #143a72">
+        <div onMouseDown="{{ pageLeft }}" style="width:16px;height:14px;background:#123a78;border:1px solid #2f6fd0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#cfe2ff;cursor:pointer;user-select:none" style-hover="background:#1a4c96">&#9664;</div>
+        <div onMouseDown="{{ onBarDown }}" style="flex:1;height:14px;background:#02060f;border:1px solid #123262;position:relative;cursor:pointer">
+          <div style="position:absolute;top:0;bottom:0;background:#2f6fd0;opacity:0.55;left:{{ thumbX }}%;width:{{ thumbW }}%"></div>
+        </div>
+        <div onMouseDown="{{ pageRight }}" style="width:16px;height:14px;background:#123a78;border:1px solid #2f6fd0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#cfe2ff;cursor:pointer;user-select:none" style-hover="background:#1a4c96">&#9654;</div>
+        <span style="font-size:10px;color:#5f83b8;padding-left:6px">{{ chRangeLabel }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:40px;flex-wrap:wrap;max-width:110ch">
+    <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:3px;width:46ch">
+      <li>Only the eight channels inside the window are drawn — off-screen channels cost nothing per frame.</li>
+      <li>Beat rows (every fourth) are marked by gutter brightness rather than a background band, so the field stays two-tone.</li>
+      <li>Empty cells sit at one dim navy: note density reads at a glance without dropping the column structure.</li>
+    </ul>
+    <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#4c4f6b;display:flex;flex-direction:column;gap:3px;width:46ch">
+      <li>Muted channels are covered by a single translucent rect — one draw call, no per-cell recolour.</li>
+      <li>The edit cursor is one stroked rect positioned from channel and field index, not a cell-level style.</li>
+      <li>Rows wrap at the pattern edge, matching a looping pattern rather than showing empty space.</li>
+    </ul>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:760},&quot;visibleChannels&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:8,&quot;min&quot;:4,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;twinGutters&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;bpm&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:140,&quot;min&quot;:60,&quot;max&quot;:220,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Transport&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { top: 0x1d - 11, chOff: 0, curCh: 2, curField: 0, playing: false };
+    this.laneRef = React.createRef();
+    this.pattern = this.buildPattern();
+  }
+
+  buildPattern() {
+    const NOTES = ['C-','C#','D-','D#','E-','F-','F#','G-','G#','A-','A#','B-'];
+    let s = 20260828;
+    const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const hex2 = n => n.toString(16).toUpperCase().padStart(2, '0');
+    const defs = [
+      { name: 'KICK', step: 4, off: 0, pitch: 24, inst: '01', fx: 0.1 },
+      { name: 'BASS', step: 2, off: 0, pitch: 35, inst: '02', fx: 0.45 },
+      { name: 'LEAD', step: 3, off: 1, pitch: 62, inst: '05', fx: 0.6 },
+      { name: 'CHRD', step: 4, off: 2, pitch: 55, inst: '07', fx: 0.3 },
+      { name: 'SNAR', step: 4, off: 2, pitch: 31, inst: '03', fx: 0.1 },
+      { name: 'HATS', step: 1, off: 0, pitch: 42, inst: '04', fx: 0.2 },
+      { name: 'PERC', step: 6, off: 3, pitch: 46, inst: '06', fx: 0.25 },
+      { name: 'PAD', step: 8, off: 0, pitch: 48, inst: '08', fx: 0.5 },
+      { name: 'ARP', step: 2, off: 1, pitch: 67, inst: '09', fx: 0.4 },
+      { name: 'STAB', step: 8, off: 4, pitch: 59, inst: '0A', fx: 0.35 },
+      { name: 'NOIS', step: 5, off: 2, pitch: 40, inst: '0B', fx: 0.3 },
+      { name: 'FX', step: 11, off: 5, pitch: 70, inst: '0C', fx: 0.8 }
+    ];
+    const FX = ['A08', 'C40', 'E13', 'F06', '1F2', '4A5'];
+    const EMPTY = { note: '---', inst: '--', vol: '--', fx: '---', on: false, off: true };
+    return defs.map((d, ci) => ({
+      num: hex2(ci + 1),
+      name: d.name,
+      rows: Array.from({ length: 64 }, (_, i) => {
+        if ((i + d.off) % d.step !== 0 || rnd() < 0.12) return EMPTY;
+        const p = d.pitch + (rnd() > 0.72 ? (rnd() > 0.5 ? 2 : -3) : 0);
+        const vol = 32 + Math.floor(rnd() * 30);
+        const hasFx = rnd() < d.fx;
+        return {
+          note: NOTES[p % 12] + Math.floor(p / 12),
+          inst: d.inst,
+          vol: vol.toString(16).toUpperCase(),
+          fx: hasFx ? FX[Math.floor(rnd() * FX.length)] : '---',
+          on: true, off: false
+        };
+      })
+    }));
+  }
+
+  componentDidMount() {
+    this.onKey = e => {
+      const k = e.key;
+      if (k === 'ArrowUp') { this.scrollRows(-1); e.preventDefault(); }
+      else if (k === 'ArrowDown') { this.scrollRows(1); e.preventDefault(); }
+      else if (k === 'ArrowLeft') { this.moveField(-1); e.preventDefault(); }
+      else if (k === 'ArrowRight') { this.moveField(1); e.preventDefault(); }
+      else if (k === ' ') { this.togglePlay(); e.preventDefault(); }
+    };
+    window.addEventListener('keydown', this.onKey);
+    this.onWheel = e => {
+      if (e.shiftKey) this.scrollCh(e.deltaY > 0 ? 1 : -1);
+      else this.scrollRows(e.deltaY > 0 ? 1 : -1);
+      e.preventDefault();
+    };
+    if (this.laneRef.current) this.laneRef.current.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this.onKey);
+    if (this.laneRef.current) this.laneRef.current.removeEventListener('wheel', this.onWheel);
+    clearInterval(this.timer);
+  }
+
+  vis() { return Math.max(2, Math.min(12, this.props.visibleChannels ?? 8)); }
+
+  scrollRows(d) { this.setState(s => ({ top: s.top + d })); }
+
+  scrollCh(d) {
+    const max = 12 - this.vis();
+    this.setState(s => ({ chOff: Math.max(0, Math.min(max, s.chOff + d)) }));
+  }
+
+  moveField(d) {
+    this.setState(s => {
+      let f = s.curField + d, ch = s.curCh;
+      if (f > 3) { f = 0; ch = Math.min(11, ch + 1); }
+      if (f < 0) { f = 3; ch = Math.max(0, ch - 1); }
+      let off = s.chOff;
+      const v = this.vis();
+      if (ch < off) off = ch;
+      if (ch > off + v - 1) off = ch - v + 1;
+      return { curField: f, curCh: ch, chOff: off };
+    });
+  }
+
+  togglePlay = () => {
+    clearInterval(this.timer);
+    const playing = !this.state.playing;
+    if (playing) {
+      const bpm = this.props.bpm ?? 140;
+      this.timer = setInterval(() => this.scrollRows(1), 60000 / (bpm * 4));
+    }
+    this.setState({ playing });
+  };
+
+  onLaneDown = e => {
+    if (e.button !== 0) return;
+    const y0 = e.clientY, top0 = this.state.top;
+    let moved = false;
+    const mv = ev => {
+      const d = Math.round((y0 - ev.clientY) / 18);
+      if (d !== 0) moved = true;
+      this.setState({ top: top0 + d });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+      this.dragged = moved;
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  };
+
+  onBarDown = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const max = 12 - this.vis();
+    const t = (e.clientX - r.left) / r.width;
+    this.setState({ chOff: Math.max(0, Math.min(max, Math.round(t * 12 - this.vis() / 2))) });
+  };
+
+  renderVals() {
+    const V = this.vis();
+    const ROWS = 22, CUR = 11;
+    const hex2 = n => n.toString(16).toUpperCase().padStart(2, '0');
+    const mod = n => ((n % 64) + 64) % 64;
+    const { top, chOff, curCh, curField, playing } = this.state;
+    const muted = this.muted || (this.muted = new Set());
+
+    const gutter = Array.from({ length: ROWS }, (_, i) => {
+      const r = mod(top + i);
+      return { hex: hex2(r), beat: r % 4 === 0, notBeat: r % 4 !== 0 };
+    });
+
+    const channels = [];
+    for (let vi = 0; vi < V; vi++) {
+      const ci = chOff + vi;
+      const src = this.pattern[ci];
+      channels.push({
+        num: src.num,
+        name: src.name,
+        muteTag: muted.has(ci) ? 'M' : '',
+        cells: Array.from({ length: ROWS }, (_, i) => src.rows[mod(top + i)]),
+        onMute: e => {
+          e.stopPropagation();
+          muted.has(ci) ? muted.delete(ci) : muted.add(ci);
+          this.forceUpdate();
+        },
+        onCellClick: e => {
+          if (this.dragged) { this.dragged = false; return; }
+          const r = e.currentTarget.getBoundingClientRect();
+          const row = Math.floor((e.clientY - r.top - 20) / 18);
+          if (row < 0) return;
+          const x = e.clientX - r.left;
+          const f = x < 39 ? 0 : x < 62 ? 1 : x < 85 ? 2 : 3;
+          this.setState({ top: top + row - CUR, curCh: ci, curField: f });
+        }
+      });
+    }
+
+    const FX = [[8, 30], [41, 20], [64, 20], [87, 28]];
+    const [fx0, fw] = FX[curField];
+    const names = ['NOTE', 'INST', 'VOL', 'FX'];
+
+    return {
+      gutter, channels,
+      twinGutters: this.props.twinGutters ?? true,
+      bpm: this.props.bpm ?? 140,
+      playing,
+      playGlyph: playing ? '\u25A0' : '\u25B6',
+      playLabel: playing ? 'STOP' : 'PLAY',
+      cursorHex: hex2(mod(top + CUR)),
+      cursorChHex: this.pattern[curCh].num,
+      fieldName: names[curField],
+      costNote: V * ROWS * 11 + ' GLYPHS / FRAME',
+      curX: 35 + (curCh - chOff) * 121 + fx0 - 2,
+      curW: fw,
+      muteOverlays: [...muted].filter(ci => ci >= chOff && ci < chOff + V).map(ci => ({ x: 35 + (ci - chOff) * 121 })),
+      thumbX: (chOff / 12) * 100,
+      thumbW: (V / 12) * 100,
+      chRangeLabel: 'CH ' + hex2(chOff + 1) + '\u2013' + hex2(chOff + V) + ' OF 0C',
+      togglePlay: this.togglePlay,
+      onLaneDown: this.onLaneDown,
+      onBarDown: this.onBarDown,
+      pageLeft: () => this.scrollCh(-1),
+      pageRight: () => this.scrollCh(1),
+      laneRef: this.laneRef
+    };
+  }
+}
+
+</script>
+</body>
+</html>
