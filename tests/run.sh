@@ -12,3 +12,5 @@ cc -Wall -Wextra -Werror -o "$out/knob_math_test" tests/knob_math_test.c
 "$out/knob_math_test"
 cc -Wall -Wextra -Werror -o "$out/rotary_palette_test" tests/rotary_palette_test.c
 "$out/rotary_palette_test"
+cc -Wall -Wextra -Werror -o "$out/fader_math_test" tests/fader_math_test.c
+"$out/fader_math_test"
