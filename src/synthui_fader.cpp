@@ -108,7 +108,13 @@ static float fd_cap_y(const fd_geom_t *g, float value)
 
 /* Cap extent (spec section 7): union of the stroked body and the offset
  * shadow -- x 3.2..94 units, y capY-0.8 .. capY+capH+2.5 -- rounded outward
- * and inflated 2 px.  This is the ONLY damage a value change produces. */
+ * and inflated 2 px (px, not units).  This is the ONLY damage a value
+ * change produces, so these literals BOUND what fd_draw paints for the cap
+ * (shadow right edge 94, body-with-stroke left edge 3.2).  Widen or move
+ * any cap element and this box must follow -- the delta-equality guard in
+ * examples/display/synthui_fader_test (its gate compares a delta-sequence
+ * checksum against a fresh full render, every boot) is what catches the
+ * mismatch. */
 static bool fd_cap_extent(const synthui_fader_t *f, float value, lv_area_t *a)
 {
     lv_area_t coords; fd_geom_t g;
@@ -146,9 +152,9 @@ float synthui_fader_get_value(const lv_obj_t *obj)
 }
 
 #define FD_SETTER(obj, field, val) do { \
-    synthui_fader_t *f = (synthui_fader_t *)obj; \
-    if (f->field == (val)) return; \
-    f->field = (val); \
+    synthui_fader_t *f_ = (synthui_fader_t *)obj; \
+    if (f_->field == (val)) return; \
+    f_->field = (val); \
     lv_obj_invalidate(obj); } while (0)
 
 void synthui_fader_set_ticks(lv_obj_t *obj, uint8_t n)
@@ -163,9 +169,9 @@ void synthui_fader_set_center(lv_obj_t *obj, bool on)
 void synthui_fader_set_panel(lv_obj_t *obj, uint32_t rgb)
 { LV_ASSERT_OBJ(obj, MY_CLASS); FD_SETTER(obj, panel, rgb); }
 
-/* ---- palette (spec section 5) -- one pure function so a future second
- * engine shares it (the rotary's two-engines-one-palette seam, prepared
- * but not built) ---- */
+/* ---- palette (spec section 5) -- structured as a pure function so a
+ * second engine COULD share it later (it would move to a header then --
+ * the rotary's seam; nothing is exported today) ---- */
 typedef struct {
     uint32_t cap_top, cap_mid, cap_low, ticks, center;
     lv_opa_t gloss_opa;
@@ -213,7 +219,9 @@ static void fd_input_pressing(lv_event_t *e)
 }
 
 /* Press/release changes ONLY cap colors (spec section 3), so the state
- * repaint is the cap extent, not the whole widget. */
+ * repaint is the cap extent, not the whole widget.  If fd_palette ever
+ * makes a pressed-dependent color OUTSIDE the cap (ticks, center), this
+ * must become a full invalidate. */
 static void fd_input_state(lv_event_t *e)
 {
     lv_obj_t *obj = lv_event_get_current_target_obj(e);
@@ -262,8 +270,10 @@ static void fd_hline(lv_layer_t *layer, float x0, float y0, float xa,
     l.opa = opa;
     l.width = (int32_t)lroundf(w_units * u);
     if (l.width < 1) l.width = 1;
-    l.p1.x = x0 + xa * u; l.p1.y = y0 + y * u;
-    l.p2.x = x0 + xb * u; l.p2.y = y0 + y * u;
+    l.p1.x = (lv_value_precise_t)lroundf(x0 + xa * u);
+    l.p1.y = (lv_value_precise_t)lroundf(y0 + y * u);
+    l.p2.x = (lv_value_precise_t)lroundf(x0 + xb * u);
+    l.p2.y = l.p1.y;
     lv_draw_line(layer, &l);
 }
 
@@ -351,7 +361,7 @@ static void fd_draw(synthui_fader_t *f, lv_layer_t *layer)
                 0.14f * ch, u);
 
         /* two gloss strips */
-        const float gh = fmaxf(1.5f, 0.12f * ch);
+        const float gh = fmaxf(1.5f, 0.12f * ch); /* spec/DC formula kept verbatim; the 1.5 floor is dead given cap_h >= 14 */
         lv_draw_rect_dsc_init(&d);
         d.bg_color = lv_color_hex(0xFFFFFF); d.bg_opa = pal.gloss_opa;
         fd_rect(layer, &d, x0, y0, 9.0f, cy + 0.16f * ch, 78.0f, gh, u);
