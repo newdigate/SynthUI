@@ -33,7 +33,7 @@ reappearing `reference/rebirth/` is a deliberate decision, not a restoration.
   community mod art, rights unclear — which is why it is not in this repo.
 - Clean-room vector rebuilds from *written descriptions* are the intended
   path — the same firewall discipline as the rt1176-evkb tree's license audit.
-  the `src/` widgets are built that way and derive from the DC set, not from
+  The `src/` widgets are built that way and derive from the DC set, not from
   the ReBirth material.
 - The MIT LICENSE covers this repo's own content: the DC component set,
   `support.js`, and all `src/` code.
