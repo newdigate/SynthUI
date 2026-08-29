@@ -141,7 +141,15 @@ static bool finish_path(vg_lite_path_t *p, size_t start, float x0, float y0,
                         float x1, float y1)
 {
     emit(VLC_OP_END);
-    if (s_overflow) return false;
+    /* s_overflow is PER-CALL (reset at the top of draw_fader_clipped, along
+     * with s_used) -- a frame-sticky flag would leave a split-brain state
+     * (s_used==0 says "arena free" while every later shape in the frame is
+     * silently refused) and, for this widget, that means stale pixels on
+     * every LATER fader that frame even though each had the whole arena
+     * free. Per-call confines the damage to the one piece that genuinely
+     * didn't fit. Counted here, not just detected: every refusal is a real
+     * error. */
+    if (s_overflow) { s_err++; return false; }
     memset(p, 0, sizeof(*p));
     vg_lite_init_path(p, VG_LITE_S32, VG_LITE_HIGH,
                       (uint32_t)((s_used - start) * sizeof(int32_t)),
@@ -198,7 +206,14 @@ static vg_lite_linear_gradient_t *grad_get(int band, int stidx,
          * forever while counting the error exactly once. */
         const bool ok = vg_lite_set_grad(g, 2, cols, stops) == VG_LITE_SUCCESS
                       && vg_lite_update_grad(g) == VG_LITE_SUCCESS;
-        if (!ok) { s_err++; return NULL; }
+        /* vg_lite_clear_grad frees grad->image if its handle is set --
+         * without it, the next frame's memset wipes the handle and leaks
+         * the 4 KB ramp allocation per band per frame. Not reachable with
+         * this driver (both calls only ever return SUCCESS here), but the
+         * cleanup is free and correct either way. init_grad's own failure
+         * above needs no such cleanup -- nothing was allocated on that
+         * path. */
+        if (!ok) { s_err++; vg_lite_clear_grad(g); return NULL; }
         s_grad_ready[band][stidx] = true;
     }
     return &s_grads[band][stidx];
@@ -268,8 +283,13 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
      * call to this function -- a different clip piece, a different fader --
      * is still needed once that prior call's vg_lite_draw()s have returned.
      * This is what shrinks the real peak from "the whole frame" (up to ~80
-     * calls) to "one fader's shapes" (~722 words worst case). */
+     * calls) to "one fader's shapes" (~722 words worst case). s_overflow is
+     * reset alongside s_used -- both are PER-CALL state now, not per-frame:
+     * a truncation in one piece must not silently refuse every later shape
+     * in this call, and must not poison unrelated calls later in the frame
+     * (see finish_path's comment). */
     s_used = 0;
+    s_overflow = false;
     const synthui_fader_geom_t *g = c->g;
     const synthui_fader_palette_t *pal = c->pal;
     const float ch = g->cap_h, cy = c->cap_y, bw = 1.6f;
@@ -288,7 +308,15 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
      * the SAME pass whose rects would overlap (spacing = travel/(n-1) <
      * tick_w) are COALESCED into one run rect -- this is what ENFORCES
      * winding-1, since spacing shrinks below tick_w at large vh/small n and
-     * collapses to 0 at travel=0 (the file header's coalescing note). */
+     * collapses to 0 at travel=0 (the file header's coalescing note).
+     * ★ The union-of-overlapping-rects-is-a-rect argument (so `run_y1 = y1`
+     * is equivalent to `run_y1 = max(run_y1, y1)`) depends on ty being
+     * MONOTONIC in i, which holds because synthui_fader_geom() clamps
+     * travel >= 0 -- without that clamp a negative travel would walk ty
+     * backwards and a later, shorter run could be silently dropped instead
+     * of extending it. `y0 <= run_y1` (not `<`) is deliberate too: it
+     * coalesces exactly-touching rects, avoiding a coincident-edge
+     * tessellation case rather than merely a strictly-overlapping one. */
     const float tick_w = fmaxf(1.4f, 0.012f * g->vh);
     const int n = c->f->ticks;
     for (int pass = 0; pass < 2; pass++) {
@@ -435,9 +463,15 @@ static void compose_pass(void)
         /* Retire before anyone (checksums, scanout) touches the buffer. */
         GPU_TRY(vg_lite_finish());
     }
-    /* Reclaim the per-frame paths -- only AFTER finish, in case the driver
-     * references (rather than copied) the path data until submit. */
-    if (s_overflow) s_err++;
+    /* Reclaim the arena -- only AFTER finish, in case the driver references
+     * (rather than copied) the path data until submit. Belt-and-braces only:
+     * s_overflow is counted and reset PER CALL in finish_path()/
+     * draw_fader_clipped() now, so there is nothing left to count here --
+     * every emit() that ever set s_overflow was already followed by its own
+     * shape's finish_path() before this point (the one branch in
+     * draw_fader_clipped that skips finish_path() -- the empty-pass
+     * `s_used = start; continue;` in the tick loop -- can only run when that
+     * pass emitted nothing, so it can't be hiding a trip it caused itself). */
     s_used = 0;
     s_overflow = false;
 }
