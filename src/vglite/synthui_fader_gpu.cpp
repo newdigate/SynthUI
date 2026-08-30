@@ -2,21 +2,54 @@
  * Copyright (c) 2026 Nicholas Newdigate
  * SPDX-License-Identifier: MIT
  *
+ * ★★★ ONE CONTOUR PER PATH -- MEASURED ON SILICON 2026-08-29/30, and the
+ * rule every path in this file follows. This GC355 (this driver + this
+ * chip, empirically -- the mechanism is not identified) RENDERS ONLY THE
+ * FIRST CONTOUR of a vg_lite path. Any path containing more than one
+ * VLC_OP_MOVE loses every subpath after the first; vg_lite_init_path's
+ * CLOSE->END fixup only rewrites a trailing CLOSE, so that is not the
+ * mechanism -- treat the rule as empirical, not derived.
+ * Two independent confirmations from one static SWD framebuffer capture of
+ * the golden scene, BEFORE this fix:
+ *  - Ticks. The software golden draws 12 visible ticks per fader at
+ *    y = 143, 157, 170, 184, 197, 211, 224, 237, 251, 264, 278, 291. The GPU
+ *    drew EXACTLY TWO: y = 143 and y = 156 -- tick i=0 (the first rect of
+ *    the bright pass's path) and tick i=1 (the first rect of the dim
+ *    pass's path). The emitting loop was correct (it emitted 4 rects for
+ *    the bright pass and 9 for the dim pass at this spacing; nothing
+ *    coalesces), so the loss was in rendering, not emission.
+ *  - The border ring (see below). Its first contour is the OUTER rounded
+ *    rect, so with the inner contour dropped it filled solid -- exactly the
+ *    "solid dark cap" seen on glass, in the border colour 0x20262A.
+ * This SUPERSEDES the previous claim in this file that "several disjoint
+ * same-winding contours" (the old multi-rect tick batching) were safe --
+ * that claim was WRONG, and the tick evidence above disproves it directly:
+ * both winding-1 tick paths lost every contour after their first regardless
+ * of winding or disjointness. The rotary's sibling file
+ * (synthui_rotary_knob_gpu.cpp) never hit this because every path it builds
+ * is already a SINGLE contour (emit_ring is a deliberate one-contour
+ * keyhole; emit_track's comment records rewriting an earlier multi-subpath
+ * version that rendered nondeterministically -- a DIFFERENT defect than
+ * this one, but the same practical fix: don't emit more than one MOVE per
+ * path). Every shape in this file that can have more than one instance
+ * (ticks) is now its own path and its own vg_lite_draw call; see the tick
+ * loop below.
+ *
  * Structure is synthui_rotary_knob_gpu.cpp's, simplified: every shape is
  * emitted per frame into the bump arena in viewBox units x16 (S32) with the
  * fader's CURRENT cap_y baked in, and ONE matrix per fader
  * (translate(coords) * scale(u/16)) maps them to the screen -- a fader has
  * no rotation, so the rotary's two-matrix AA lesson does not arise. Ticks
- * are batched into two multi-rect paths (bright / dim); adjacent ticks
- * whose rects would overlap (spacing < tick_w) are COALESCED into one run
- * rect rather than emitted as separate overlapping rects -- the union of
- * overlapping same-x axis-aligned rects is itself a rect, so this is
- * visually identical and is what ENFORCES winding-1 everywhere, rather than
- * assuming non-overlap happens to hold. Overlapping subpaths were the
- * rotary's one source of per-boot nondeterminism (its emit_track comment);
- * unlike the rotary's fixed geometry, tick spacing here varies with vh and
- * travel and coincides at travel=0, so coalescing -- not spacing -- is what
- * keeps winding at 1.
+ * are still run-coalesced (adjacent ticks whose rects would overlap --
+ * spacing < tick_w -- are merged into one run rect rather than emitted as
+ * separate overlapping rects; the union of overlapping same-x axis-aligned
+ * rects is itself a rect, so this stays visually identical), but each
+ * coalesced run is now its OWN path, finished and drawn immediately -- see
+ * the ONE-CONTOUR-PER-PATH rule above. The coalescing logic still matters
+ * for the degenerate case where spacing shrinks toward 0 near travel=0: it
+ * keeps the DRAW COUNT down (fewer, wider rects) even though correctness no
+ * longer depends on it the way it did when runs shared one multi-contour
+ * path.
  *
  * The cap's border was originally a stroked RING -- an outer rounded
  * contour plus a reversed inner contour in one path, relying on non-zero
@@ -27,16 +60,18 @@
  * opposite-winding subpaths (two separate VLC_OP_MOVEs). On GC355 silicon
  * that geometry rendered the whole cap SOLID in the border colour and the
  * full-framebuffer checksum differed on every one of 7 boots across two
- * builds, with fd_gpu_err=0 throughout (2026-08-29) -- the same
- * per-boot-nondeterminism class the rotary's emit_track comment records for
- * overlapping subpaths (see above). Fixed by eliminating the ring rather
- * than trying to make the winding work: the border is now a plain filled
- * rounded-rect PLATE drawn FIRST, with the base/bands/groove inset by bw on
- * top of it, so the border shows as a margin rather than a cut hole. The
- * rule this file follows as a result: every path here is either a single
- * simple contour, or several DISJOINT SAME-WINDING contours (the tick
- * batches, per the coalescing note above); nested opposite-winding contours
- * are banned.
+ * builds, with fd_gpu_err=0 throughout (2026-08-29) -- at the time this was
+ * attributed to the same per-boot-nondeterminism class the rotary's
+ * emit_track comment records for overlapping subpaths; the 2026-08-29/30
+ * tick investigation above found the REAL mechanism (first-contour-only
+ * rendering) and it explains this symptom exactly, deterministically, with
+ * no nondeterminism required -- the "solid cap" IS the outer contour drawn
+ * alone. Fixed by eliminating the ring rather than trying to make the
+ * winding work: the border is now a plain filled rounded-rect PLATE drawn
+ * FIRST, with the base/bands/groove inset by bw on top of it, so the border
+ * shows as a margin rather than a cut hole. That fix satisfies the
+ * ONE-CONTOUR-PER-PATH rule as a side effect (a filled rounded rect is a
+ * single contour), which is exactly why it worked.
  *
  * The cap bands are drawn as FD_GRAD_STRIPS solid interpolated strips (see
  * near lerp_rgb below) -- solid strips are the ONLY implementation; both
@@ -101,15 +136,17 @@ static uint32_t s_err = 0;
  * buffer BEFORE returning. So the arena is safe to reuse the instant the
  * PRECEDING vg_lite_draw() call returns --
  * draw_fader_clipped() resets s_used to 0 on entry (see there), and the true
- * peak is ONE fader's shapes, worst case 681 non-band words at 33 ticks:
- * panel/center/groove/two gloss rects ~14 words each, rod/shadow/base ~45
- * words each, border PLATE ~45 words (a rounded rect, same shape as base --
- * see the winding note in the file header for why this replaced a 58-word
- * nested-contour ring), ticks up to ~431 words (33 emit_rects, worst case
- * not coalesced) -- PLUS the two cap bands, each now drawn as FD_GRAD_STRIPS
- * solid strips instead of one gradient-filled rect apiece (see the arena
- * arithmetic near lerp_rgb below): 681 + 28 * FD_GRAD_STRIPS words, 905 at
- * the default FD_GRAD_STRIPS=8 -- comfortably inside 2048 with margin.
+ * peak is ONE fader's shapes, worst case (a full, unculled clip -- see the
+ * ONE-CONTOUR-PER-PATH note in the file header and the arena arithmetic near
+ * lerp_rgb below for the current tick accounting) 712 non-band words at 33
+ * ticks: panel/center/groove/two gloss rects ~14 words each, rod/shadow/base
+ * ~45 words each, border PLATE ~45 words (a rounded rect, same shape as base
+ * -- see the file header for why this replaced a 58-word nested-contour
+ * ring), ticks up to ~462 words (33 one-rect runs, each its own path with
+ * its own END -- worst case, no coalescing) -- PLUS the two cap bands, each
+ * now drawn as FD_GRAD_STRIPS solid strips instead of one gradient-filled
+ * rect apiece: 712 + 28 * FD_GRAD_STRIPS words, 936 at the default
+ * FD_GRAD_STRIPS=8 -- comfortably inside 2048 with margin.
  * Overflow is still COUNTED
  * and REFUSED (finish_path() returns false; a truncated path set is a wrong
  * picture that still draws -- worse here, since it is exactly what hangs
@@ -230,20 +267,39 @@ static uint32_t lerp_rgb(uint32_t c0, uint32_t c1, float t)
     return (r << 16) | (g << 8) | b;
 }
 
-/* Arena arithmetic -- see FD_ARENA_WORDS above for the 681-word baseline of
- * a full draw_fader_clipped() call excluding the cap bands. The two bands
- * add 2 * FD_GRAD_STRIPS strip rects at 14 words each (an emit_rect contour
- * is 13 words -- MOVE+2, three LINEs at 3 words each, CLOSE -- plus
- * finish_path's own VLC_OP_END), each its own finish_path()/vg_lite_draw()
- * call since each strip needs its own colour. Worst case:
- * 681 + 28 * FD_GRAD_STRIPS words. At the default FD_GRAD_STRIPS=8:
- * 681 + 224 = 905, comfortably inside FD_ARENA_WORDS (2048, ~56% margin);
- * FD_GRAD_STRIPS could rise to 48 before 2048 is exceeded, well past the
- * documented headroom of 16. Asserted, not just stated, so a future N this
- * arena can't hold fails to compile instead of silently truncating
- * (finish_path()'s overflow guard still catches it at runtime either way,
- * but a build-time check is cheaper than a bench boot). */
-static_assert(681 + 28 * FD_GRAD_STRIPS <= FD_ARENA_WORDS,
+/* Arena arithmetic -- see FD_ARENA_WORDS above for the worst-case words of a
+ * full (unculled -- the cull in draw_fader_clipped only ever REDUCES words
+ * used, so the bound below assumes a full-fader clip where nothing is
+ * culled) draw_fader_clipped() call excluding the cap bands, now that ticks
+ * are ONE CONTOUR PER PATH (see the file header). s_used is a bump
+ * allocator that is NOT reclaimed between shapes within one call -- only at
+ * the top of the next draw_fader_clipped() call -- so drawing each tick run
+ * separately does not shrink the per-call peak; it only adds one
+ * VLC_OP_END word per run in place of one END per PASS:
+ *  - panel/center-line/groove/two gloss rects: 5 x 14 words (an emit_rect
+ *    contour is 13 words -- MOVE+2, three LINEs at 3 words each, CLOSE --
+ *    plus finish_path's own END) = 70
+ *  - rod/shadow/base: 3 x 45 words (a rounded rect -- MOVE+2, four
+ *    LINE+CUBIC pairs, CLOSE, END) = 135
+ *  - border PLATE: 1 x 45 words = 45
+ *  - ticks: worst case is the full 33-tick clamp (synthui_fader_set_ticks)
+ *    with NO coalescing at all, so every tick is its own one-rect run:
+ *    33 emit_rects x 13 words = 429, PLUS one END per run (33, not 2 --
+ *    the one-contour-per-path change is exactly what turned "one END per
+ *    PASS" into "one END per RUN") = 462
+ *  Subtotal: 70 + 135 + 45 + 462 = 712.
+ * The two cap bands add 2 * FD_GRAD_STRIPS strip rects at 14 words each
+ * (13-word emit_rect contour + END), each its own finish_path()/
+ * vg_lite_draw() call since each strip needs its own colour. Worst case:
+ * 712 + 28 * FD_GRAD_STRIPS words. At the default FD_GRAD_STRIPS=8:
+ * 712 + 224 = 936, comfortably inside FD_ARENA_WORDS (2048, ~54% margin);
+ * FD_GRAD_STRIPS could rise to 47 before 2048 is exceeded ((2048-712)/28 =
+ * 47.7), well past the documented headroom of 16. Asserted, not just
+ * stated, so a future N this arena can't hold fails to compile instead of
+ * silently truncating (finish_path()'s overflow guard still catches it at
+ * runtime either way, but a build-time check is cheaper than a bench
+ * boot). */
+static_assert(712 + 28 * FD_GRAD_STRIPS <= FD_ARENA_WORDS,
              "FD_GRAD_STRIPS too large for FD_ARENA_WORDS");
 
 /* ---- one-composite-per-pixel machinery (the rotary's, verbatim shape) ---
@@ -258,9 +314,56 @@ typedef struct {
     const synthui_fader_palette_t *pal;
     const vg_lite_matrix_t *m;      /* unit*16 -> screen */
     float cap_y;                    /* units, this frame */
+    lv_area_t coords;               /* screen-space obj footprint (compose_pass) */
 } fd_gpu_ctx_t;
 
 static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip);
+
+/* ---- clip culling (pure optimisation) -------------------------------------
+ * draw_fader_clipped's scissor already restricts every pixel written to
+ * *clip, so skipping a shape whose screen bbox misses *clip entirely cannot
+ * change a single output pixel -- it only avoids submitting a draw that
+ * would paint nothing. During the cap-drag animation *clip is a narrow strip
+ * around the moving cap, so this is what makes drawing each tick run as its
+ * own vg_lite_draw() call (the ONE-CONTOUR-PER-PATH fix, file header)
+ * affordable: most runs fall outside that strip and are never emitted.
+ * x0/y0/x1/y1 are in the shape's own VIEWBOX UNITS (pre-matrix, matching
+ * every emit_*() call in this file). Converted to screen pixels via the
+ * same coords.y1 + y * g->u the sw path uses (synthui_fader.cpp's
+ * fd_cap_extent), rounded OUTWARD -- floor the low edge, ceil the high edge
+ * -- and inflated by 1 px on every side before testing. Deliberately
+ * conservative: a cull that is even slightly too tight would drop a
+ * partially-visible shape, and lv_area_t's y2/x2 are INCLUSIVE, so an exact
+ * (non-inflated) bound would be one pixel short of a shape whose true edge
+ * lands exactly on clip's boundary. When in doubt this returns true (draw
+ * it) rather than false. */
+static bool fd_bbox_visible(const fd_gpu_ctx_t *c, const lv_area_t *clip,
+                            float x0, float y0, float x1, float y1)
+{
+    const int32_t sx0 = c->coords.x1 + (int32_t)floorf(x0 * c->g->u) - 1;
+    const int32_t sx1 = c->coords.x1 + (int32_t)ceilf(x1 * c->g->u) + 1;
+    const int32_t sy0 = c->coords.y1 + (int32_t)floorf(y0 * c->g->u) - 1;
+    const int32_t sy1 = c->coords.y1 + (int32_t)ceilf(y1 * c->g->u) + 1;
+    return sx0 <= clip->x2 && sx1 >= clip->x1 && sy0 <= clip->y2 && sy1 >= clip->y1;
+}
+
+/* Emit, finish and draw one coalesced tick run as its own single-contour
+ * path (the ONE-CONTOUR-PER-PATH rule, file header) -- culled against *clip
+ * FIRST, before anything is emitted into the arena, since the scissor
+ * already confines output there and a culled run costs nothing. x range
+ * 8..92 units matches the tick rect emitted below (emit_rect(8, y, 84, h)). */
+static void fd_draw_tick_run(const fd_gpu_ctx_t *c, const lv_area_t *clip,
+                             vg_lite_path_t *p, float y0, float y1,
+                             uint32_t color, uint32_t opa)
+{
+    if (!fd_bbox_visible(c, clip, 8.0f, y0, 92.0f, y1)) return;
+    const size_t start = s_used;
+    emit_rect(8.0f, y0, 84.0f, y1 - y0);
+    if (finish_path(p, start, 8.0f, y0, 92.0f, y1))
+        GPU_TRY(vg_lite_draw(s_cur_target, p, VG_LITE_FILL_NON_ZERO,
+                             (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                             abgr_a(color, opa)));
+}
 
 static void composite_minus(const fd_gpu_ctx_t *ctx, lv_area_t area,
                             const lv_area_t *done, int ndone)
@@ -302,15 +405,14 @@ static void composite_minus(const fd_gpu_ctx_t *ctx, lv_area_t area,
  * shapes and draw order are the same so the looks stay close. */
 static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
 {
-    (void)clip;
     /* Reset the per-draw-call arena HERE, not once per frame: vg_lite_draw()
      * copies (memcpy, push_data) every path's words into the command buffer
      * before returning (see FD_ARENA_WORDS above), so nothing from a prior
      * call to this function -- a different clip piece, a different fader --
      * is still needed once that prior call's vg_lite_draw()s have returned.
      * This is what shrinks the real peak from "the whole frame" (up to ~80
-     * calls) to "one fader's shapes" (694 + 28*FD_GRAD_STRIPS words worst
-     * case, see FD_ARENA_WORDS above). s_overflow is
+     * calls) to "one fader's shapes" (712 + 28*FD_GRAD_STRIPS words worst
+     * case, see the arena arithmetic near lerp_rgb above). s_overflow is
      * reset alongside s_used -- both are PER-CALL state now, not per-frame:
      * a truncation in one piece must not silently refuse every later shape
      * in this call, and must not poison unrelated calls later in the frame
@@ -330,12 +432,15 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(c->f->panel, 0xFFu)));
 
-    /* ticks: two multi-rect paths (bright i%4==0 at 158, dim 87); tick_w in
+    /* ticks: bright (i%4==0, opa 158) and dim (opa 87) passes, tick_w in
      * units, drawn as thin rects centred on the tick y. Adjacent ticks in
      * the SAME pass whose rects would overlap (spacing = travel/(n-1) <
-     * tick_w) are COALESCED into one run rect -- this is what ENFORCES
-     * winding-1, since spacing shrinks below tick_w at large vh/small n and
-     * collapses to 0 at travel=0 (the file header's coalescing note).
+     * tick_w) are COALESCED into one run rect -- the union of overlapping
+     * same-x axis-aligned rects is itself a rect, so this stays visually
+     * identical while cutting the draw count (matters more now that each
+     * run is its own vg_lite_draw() call -- see below). Coalescing no
+     * longer has anything to do with winding (the file header's
+     * ONE-CONTOUR-PER-PATH finding: winding was never the mechanism).
      * ★ The union-of-overlapping-rects-is-a-rect argument (so `run_y1 = y1`
      * is equivalent to `run_y1 = max(run_y1, y1)`) depends on ty being
      * MONOTONIC in i, which holds because synthui_fader_geom() clamps
@@ -343,29 +448,35 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
      * backwards and a later, shorter run could be silently dropped instead
      * of extending it. `y0 <= run_y1` (not `<`) is deliberate too: it
      * coalesces exactly-touching rects, avoiding a coincident-edge
-     * tessellation case rather than merely a strictly-overlapping one. */
+     * tessellation case rather than merely a strictly-overlapping one.
+     * ★ EACH RUN IS ITS OWN PATH, finished and drawn the moment it ends
+     * (fd_draw_tick_run below), instead of accumulating every run in one
+     * pass into a single multi-MOVE path -- that accumulation is exactly
+     * the shape of path this silicon drops subpaths from (file header).
+     * A run is culled (via fd_bbox_visible) before it is even emitted: the
+     * scissor already confines every draw to *clip, so a run whose box
+     * misses *clip entirely can be skipped for free -- during the cap-drag
+     * animation *clip is a narrow strip, so typically only the 2-3 runs
+     * nearest the cap survive out of up to 33. */
     const float tick_w = fmaxf(1.4f, 0.012f * g->vh);
     const int n = c->f->ticks;
     for (int pass = 0; pass < 2; pass++) {
-        start = s_used;
-        int emitted = 0;
+        bool have_run = false;
         float run_y0 = 0.0f, run_y1 = 0.0f;
+        const uint32_t opa = (pass == 0) ? 158u : 87u;
         for (int i = 0; i < n; i++) {
             const bool bright = (i % 4 == 0);
             if (bright != (pass == 0)) continue;
             const float ty = g->top + ch * 0.5f
                              + (float)i * g->travel / (float)(n - 1);
             const float y0 = ty - tick_w * 0.5f, y1 = ty + tick_w * 0.5f;
-            if (emitted && y0 <= run_y1) { run_y1 = y1; continue; } /* extend */
-            if (emitted) emit_rect(8.0f, run_y0, 84.0f, run_y1 - run_y0);
-            run_y0 = y0; run_y1 = y1; emitted++;
+            if (have_run && y0 <= run_y1) { run_y1 = y1; continue; } /* extend */
+            if (have_run) fd_draw_tick_run(c, clip, &p, run_y0, run_y1,
+                                           pal->ticks, opa);
+            run_y0 = y0; run_y1 = y1; have_run = true;
         }
-        if (emitted) emit_rect(8.0f, run_y0, 84.0f, run_y1 - run_y0);
-        if (!emitted) { s_used = start; continue; }
-        if (finish_path(&p, start, 8.0f, 0.0f, 92.0f, g->vh))
-            GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                                 (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                                 abgr_a(pal->ticks, pass == 0 ? 158u : 87u)));
+        if (have_run) fd_draw_tick_run(c, clip, &p, run_y0, run_y1,
+                                       pal->ticks, opa);
     }
 
     /* rod */
@@ -377,14 +488,18 @@ static void draw_fader_clipped(const fd_gpu_ctx_t *c, const lv_area_t *clip)
                              (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
                              abgr_a(0x14181Bu, 0xFFu)));
 
-    /* center-detent line */
+    /* center-detent line -- culled like the ticks (fd_bbox_visible): fixed
+     * at cap-centre travel regardless of the cap's current position, so it
+     * is very often outside a narrow drag-animation clip. */
     if (c->f->center) {
         const float cyl = g->top + ch * 0.5f + g->travel * 0.5f;
-        start = s_used; emit_rect(4.0f, cyl - 1.2f, 92.0f, 2.4f);
-        if (finish_path(&p, start, 4.0f, cyl - 1.2f, 96.0f, cyl + 1.2f))
-            GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
-                                 (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
-                                 abgr_a(pal->center, 0xFFu)));
+        if (fd_bbox_visible(c, clip, 4.0f, cyl - 1.2f, 96.0f, cyl + 1.2f)) {
+            start = s_used; emit_rect(4.0f, cyl - 1.2f, 92.0f, 2.4f);
+            if (finish_path(&p, start, 4.0f, cyl - 1.2f, 96.0f, cyl + 1.2f))
+                GPU_TRY(vg_lite_draw(s_cur_target, &p, VG_LITE_FILL_NON_ZERO,
+                                     (vg_lite_matrix_t *)c->m, VG_LITE_BLEND_SRC_OVER,
+                                     abgr_a(pal->center, 0xFFu)));
+        }
     }
 
     /* cap: shadow, border plate, base, band strips x 2*FD_GRAD_STRIPS,
@@ -478,7 +593,7 @@ static void compose_pass(void)
         vg_lite_translate((float)coords.x1, (float)coords.y1, &m);
         vg_lite_scale(g.u / FD_FIX, g.u / FD_FIX, &m);
         const fd_gpu_ctx_t ctx = { f, &g, &pal, &m,
-                                   synthui_fader_cap_y(&g, f->value) };
+                                   synthui_fader_cap_y(&g, f->value), coords };
         lv_area_t done[LV_INV_BUF_SIZE];
         int ndone = 0;
         for (uint32_t i = 0; i < disp->inv_p; i++) {
@@ -501,10 +616,10 @@ static void compose_pass(void)
      * s_overflow is counted and reset PER CALL in finish_path()/
      * draw_fader_clipped() now, so there is nothing left to count here --
      * every emit() that ever set s_overflow was already followed by its own
-     * shape's finish_path() before this point (the one branch in
-     * draw_fader_clipped that skips finish_path() -- the empty-pass
-     * `s_used = start; continue;` in the tick loop -- can only run when that
-     * pass emitted nothing, so it can't be hiding a trip it caused itself). */
+     * shape's finish_path() before this point. The only paths that can skip
+     * finish_path() entirely are culled tick runs and a culled centre line
+     * (fd_bbox_visible, checked BEFORE any emit() call), so a cull can never
+     * be hiding a trip it caused itself. */
     s_used = 0;
     s_overflow = false;
 }
