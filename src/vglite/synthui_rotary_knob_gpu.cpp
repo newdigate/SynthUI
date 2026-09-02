@@ -20,6 +20,7 @@
 
 extern "C" {
 #include "vg_lite.h"
+#include "vglite_guard.h"   /* one contour per path, checked -- see that header */
 }
 
 #define RK_DEG (3.14159265358979f / 180.0f)
@@ -30,7 +31,18 @@ static vg_lite_buffer_t *s_cur_target = &s_target;   /* pass-scoped target */
 static vg_lite_path_t   s_paths[3];      /* body, inner, index wedge */
 static bool             s_begun = false;
 static uint32_t         s_err = 0;
-#define GPU_TRY(call) do { if ((call) != VG_LITE_SUCCESS) s_err++; } while (0)
+/* Routed through the shared guard macro (VGLite port/vglite_guard.h) rather
+ * than the copy-pasted body this used to carry. Behaviour-identical on
+ * purpose: this retrofit's acceptance test is that no golden moves. */
+#define GPU_TRY(call) VGLITE_GUARD_TRY(call, s_err)
+
+/* Sticky, reset alongside s_overflow. A guard refusal is reported through
+ * the SAME channel as an arena overflow because it means the same thing to
+ * a caller -- the path set is not drawable -- and both builders below
+ * already end with "a truncated path set is a WRONG picture that still
+ * draws". Extending that flag beat restructuring their call sites, which
+ * would have risked the one thing this retrofit must not do: move a golden. */
+static bool s_path_bad = false;
 
 /* ---- notch path build (bench rk_geometry, reduced to the one variant) ----
  * The arena holds TWO regions: [0..s_frame_base) the rotor paths, built once
@@ -144,11 +156,20 @@ static void finish_path_b(vg_lite_path_t *p, size_t start, float bound)
 {
     emit(VLC_OP_END);
     memset(p, 0, sizeof(*p));
-    vg_lite_init_path(p, VG_LITE_S32, VG_LITE_HIGH,
-                      (uint32_t)((s_used - start) * sizeof(int32_t)),
-                      &s_arena[start],
-                      -bound * RK_FIX, -bound * RK_FIX,
-                      bound * RK_FIX, bound * RK_FIX);
+    /* ★ CHECKED init -- see vglite_guard.h. Every path this file builds is
+     * single-contour by construction (emit_ring is a deliberate one-contour
+     * keyhole; emit_track was rewritten to be one after it proved to be this
+     * machine's sole source of per-boot render nondeterminism), so in a
+     * healthy build this never fires. It exists so a future edit that
+     * reintroduces a second VLC_OP_MOVE fails loudly rather than silently
+     * losing geometry on glass -- which is precisely how that defect
+     * presented the first time. */
+    if (!vglite_guard_init_path(p, &s_arena[start], s_used - start,
+                                -bound * RK_FIX, -bound * RK_FIX,
+                                bound * RK_FIX, bound * RK_FIX, NULL)) {
+        s_err++;
+        s_path_bad = true;
+    }
 }
 static void finish_path(vg_lite_path_t *p, size_t start)
 {
@@ -156,14 +177,15 @@ static void finish_path(vg_lite_path_t *p, size_t start)
 }
 static bool build_paths(void)
 {
-    s_used = 0; s_overflow = false;
+    s_used = 0; s_overflow = false; s_path_bad = false;
     size_t start;
     start = s_used; emit_circle(36.0f);                   finish_path(&s_paths[0], start);
     start = s_used; emit_circle(27.0f);                   finish_path(&s_paths[1], start);
     start = s_used; emit_ring(16.0f, 36.0f, -8.0f, 8.0f); finish_path(&s_paths[2], start);
     s_frame_base = s_used;               /* well paths bump-allocate above */
-    /* a truncated path set is a WRONG picture that still draws (bench rule) */
-    return !s_overflow;
+    /* a truncated path set is a WRONG picture that still draws (bench rule);
+     * a guard-refused one is the same class, so it takes the same exit */
+    return !s_overflow && !s_path_bad;
 }
 
 static uint32_t abgr(uint32_t hex);
@@ -213,7 +235,7 @@ static int build_well_paths(const synthui_rotary_knob_t *k,
     }
     /* a truncated well is a wrong picture that still draws: count it where
      * the transcripts demand a zero (rk_gpu_err) and draw nothing */
-    return s_overflow ? -1 : n;
+    return (s_overflow || s_path_bad) ? -1 : n;
 }
 
 /* vg_lite_color_t is ABGR -- red in the LOW byte (vglite_probe, measured). */
@@ -378,6 +400,14 @@ static void compose_pass(void)
      * driver references (rather than copied) the path data until submit. */
     s_used = s_frame_base;
     s_overflow = false;
+    /* ★ s_path_bad is per-FRAME, reset here with s_overflow rather than left
+     * sticky. A sticky guard flag would be a split-brain state -- the arena
+     * reads "free" while every later frame's well paths are silently refused
+     * -- so one bad frame would blank the wells for the rest of the run. That
+     * is the same trap synthui_fader_gpu.cpp's finish_path documents for its
+     * own per-call overflow flag; the failure is confined to the frame that
+     * actually produced it. */
+    s_path_bad = false;
 }
 
 bool synthui_rotary_gpu_begin(void *framebuffer, int32_t w, int32_t h,

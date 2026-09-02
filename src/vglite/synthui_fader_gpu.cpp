@@ -111,6 +111,7 @@
 
 extern "C" {
 #include "vg_lite.h"
+#include "vglite_guard.h"   /* one contour per path, checked -- see that header */
 }
 
 #define FD_FIX 16.0f
@@ -118,7 +119,10 @@ extern "C" {
 static vg_lite_buffer_t *s_cur_target = NULL;
 static bool     s_begun = false;
 static uint32_t s_err = 0;
-#define GPU_TRY(call) do { if ((call) != VG_LITE_SUCCESS) s_err++; } while (0)
+/* Routed through the shared guard macro (VGLite port/vglite_guard.h) rather
+ * than the copy-pasted body this used to carry. Behaviour-identical on
+ * purpose: this retrofit's acceptance test is that no golden moves. */
+#define GPU_TRY(call) VGLITE_GUARD_TRY(call, s_err)
 
 /* ---- per-draw-call path arena --------------------------------------------
  * ★ Sized for ONE draw_fader_clipped() call, NOT one frame. The first
@@ -222,11 +226,22 @@ static bool finish_path(vg_lite_path_t *p, size_t start, float x0, float y0,
      * error. */
     if (s_overflow) { s_err++; return false; }
     memset(p, 0, sizeof(*p));
-    vg_lite_init_path(p, VG_LITE_S32, VG_LITE_HIGH,
-                      (uint32_t)((s_used - start) * sizeof(int32_t)),
-                      &s_arena[start],
-                      (x0 - 1.0f) * FD_FIX, (y0 - 1.0f) * FD_FIX,
-                      (x1 + 1.0f) * FD_FIX, (y1 + 1.0f) * FD_FIX);
+    /* ★ CHECKED init: the guard validates the words BEFORE the driver sees
+     * them and refuses a path carrying the MEASURED defect (more than one
+     * contour) or an unterminated one. A refusal is counted where the
+     * transcripts already demand a zero (fd_gpu_err) and draws nothing --
+     * the same "wrong picture that still draws" rule the arena overflow
+     * above follows. Every path this file builds is single-contour by
+     * construction, so in a healthy build this branch never fires; it exists
+     * so a future edit that reintroduces a second VLC_OP_MOVE fails loudly
+     * instead of silently losing geometry on glass. */
+    if (!vglite_guard_init_path(p, &s_arena[start], s_used - start,
+                                (x0 - 1.0f) * FD_FIX, (y0 - 1.0f) * FD_FIX,
+                                (x1 + 1.0f) * FD_FIX, (y1 + 1.0f) * FD_FIX,
+                                NULL)) {
+        s_err++;
+        return false;
+    }
     return true;
 }
 
