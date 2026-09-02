@@ -230,12 +230,14 @@ static bool finish_path(vg_lite_path_t *p, size_t start, float x0, float y0,
     return true;
 }
 
-/* vg_lite_color_t is ABGR -- red in the LOW byte (vglite_probe, measured);
- * `a` carries the sw path's opa values so the two looks stay close. */
+/* Colour packing (ABGR) and the REQUIRED premultiply live in
+ * ../synthui_fader_color.h, so a host test can reach them; see that header
+ * for the silicon measurement that makes the premultiply mandatory. */
+#include "../synthui_fader_color.h"
+
 static uint32_t abgr_a(uint32_t hex, uint32_t a)
 {
-    return (a << 24) | ((hex & 0xFFu) << 16) | (hex & 0xFF00u)
-           | ((hex >> 16) & 0xFFu);
+    return synthui_fd_abgr_a(hex, a);
 }
 
 /* ---- cap-band gradient: solid strips (the ONLY implementation -- see the

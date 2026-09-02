@@ -14,3 +14,5 @@ cc -Wall -Wextra -Werror -o "$out/rotary_palette_test" tests/rotary_palette_test
 "$out/rotary_palette_test"
 cc -Wall -Wextra -Werror -o "$out/fader_math_test" tests/fader_math_test.c
 "$out/fader_math_test"
+cc -Wall -Wextra -Werror -o "$out/fader_color_test" tests/fader_color_test.c
+"$out/fader_color_test"
