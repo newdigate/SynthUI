@@ -26,4 +26,6 @@ c++ -std=c++17 -Wall -Wextra -Werror -o "$out/level_meter_test" tests/level_mete
 "$out/level_meter_test"
 c++ -std=c++17 -Wall -Wextra -Werror -o "$out/piano_key_test" tests/piano_key_test.cpp
 "$out/piano_key_test"
+c++ -std=c++17 -Wall -Wextra -Werror -o "$out/slide_toggle_test" tests/slide_toggle_test.cpp
+"$out/slide_toggle_test"
 
