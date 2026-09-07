@@ -6,7 +6,6 @@
 #define SYNTHUI_LEVEL_METER_TYPES_H
 
 #include <cstdint>
-#include <cstdbool>
 
 namespace synthui::level_meter {
 
