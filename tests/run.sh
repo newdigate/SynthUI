@@ -24,4 +24,6 @@ cc -Wall -Wextra -Werror -o "$out/seven_segment_test" tests/seven_segment_test.c
 "$out/seven_segment_test"
 c++ -std=c++17 -Wall -Wextra -Werror -o "$out/level_meter_test" tests/level_meter_test.cpp
 "$out/level_meter_test"
+c++ -std=c++17 -Wall -Wextra -Werror -o "$out/piano_key_test" tests/piano_key_test.cpp
+"$out/piano_key_test"
 
