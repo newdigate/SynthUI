@@ -22,3 +22,6 @@ cc -Wall -Wextra -Werror -o "$out/panel_button_test" tests/panel_button_test.c
 "$out/panel_button_test"
 cc -Wall -Wextra -Werror -o "$out/seven_segment_test" tests/seven_segment_test.c
 "$out/seven_segment_test"
+c++ -std=c++17 -Wall -Wextra -Werror -o "$out/level_meter_test" tests/level_meter_test.cpp
+"$out/level_meter_test"
+
