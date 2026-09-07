@@ -18,3 +18,5 @@ cc -Wall -Wextra -Werror -o "$out/fader_color_test" tests/fader_color_test.c
 "$out/fader_color_test"
 cc -Wall -Wextra -Werror -o "$out/lamp_test" tests/lamp_test.c
 "$out/lamp_test"
+cc -Wall -Wextra -Werror -o "$out/panel_button_test" tests/panel_button_test.c
+"$out/panel_button_test"
