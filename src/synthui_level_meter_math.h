@@ -18,7 +18,7 @@ inline float clamp(float val, float min_val, float max_val) {
 }
 
 inline bool compute_layout(float w, float h, uint8_t segments, float value, float peak, MeterLayout &l) {
-    if (w < 1.0f || h < 1.0f) return false;
+    if (!(w >= 1.0f && h >= 1.0f)) return false;
     l.w = w;
     l.h = h;
     l.vh = std::round(100.0f * h / w);
