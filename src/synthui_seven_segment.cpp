@@ -94,7 +94,32 @@ static void seg_draw(synthui_seven_segment_t *seg, lv_layer_t *layer)
 
     const int32_t glow_stroke_w = (int32_t)lroundf(7.0f * g.u);
 
-    /* Render each cell */
+    /* Pass 1: Cell backgrounds (#181830 well) across all cells.
+     * Rendering all backgrounds before any foreground prevents cell i+1's
+     * background from clipping the sheared top overhang / glow of cell i. */
+    for (int ci = 0; ci < g.num_cells; ci++) {
+        const synthui_seven_segment_cell_geom_t *cell = &g.cells[ci];
+
+        lv_area_t cell_area;
+        cell_area.x1 = a.x1 + (int32_t)floorf(cell->x * g.u);
+        cell_area.y1 = a.y1;
+        cell_area.x2 = a.x1 + (int32_t)ceilf((cell->x + cell->w + g.overhang) * g.u);
+        cell_area.y2 = a.y2;
+
+        lv_area_t intersect;
+        if (!_lv_area_intersect(&intersect, &cell_area, &layer->_clip_area)) {
+            continue;
+        }
+
+        lv_draw_rect_dsc_t bg_dsc;
+        lv_draw_rect_dsc_init(&bg_dsc);
+        bg_dsc.bg_color = lv_color_hex(0x181830);
+        bg_dsc.bg_opa = LV_OPA_COVER;
+        bg_dsc.radius = 0;
+        lv_draw_rect(layer, &bg_dsc, &intersect);
+    }
+
+    /* Pass 2: Foreground segments (punctuation, ghost, glow stroke, core) */
     for (int ci = 0; ci < g.num_cells; ci++) {
         const synthui_seven_segment_cell_geom_t *cell = &g.cells[ci];
 
@@ -110,14 +135,6 @@ static void seg_draw(synthui_seven_segment_t *seg, lv_layer_t *layer)
         if (!_lv_area_intersect(&intersect, &cell_area, &layer->_clip_area)) {
             continue;
         }
-
-        /* 1. Cell background: #181830 well */
-        lv_draw_rect_dsc_t bg_dsc;
-        lv_draw_rect_dsc_init(&bg_dsc);
-        bg_dsc.bg_color = lv_color_hex(0x181830);
-        bg_dsc.bg_opa = LV_OPA_COVER;
-        bg_dsc.radius = 0;
-        lv_draw_rect(layer, &bg_dsc, &intersect);
 
         const uint16_t mask = synthui_seven_segment_get_char_mask(cell->ch);
 
@@ -166,8 +183,8 @@ static void seg_draw(synthui_seven_segment_t *seg, lv_layer_t *layer)
 
                 lv_draw_triangle_dsc_t tdsc;
                 lv_draw_triangle_dsc_init(&tdsc);
-                tdsc.bg_color = glow_color;
-                tdsc.bg_opa = ghost_opa;
+                tdsc.color = glow_color;
+                tdsc.opa = ghost_opa;
 
                 for (int ti = 0; ti < 4; ti++) {
                     tdsc.p[0].x = a.x1 + (int32_t)lroundf(poly.triangles[ti].p[0].x * g.u);
@@ -216,8 +233,8 @@ static void seg_draw(synthui_seven_segment_t *seg, lv_layer_t *layer)
 
             lv_draw_triangle_dsc_t tdsc;
             lv_draw_triangle_dsc_init(&tdsc);
-            tdsc.bg_color = on_color;
-            tdsc.bg_opa = lit_core_opa;
+            tdsc.color = on_color;
+            tdsc.opa = lit_core_opa;
 
             for (int ti = 0; ti < 4; ti++) {
                 tdsc.p[0].x = a.x1 + (int32_t)lroundf(poly.triangles[ti].p[0].x * g.u);
@@ -244,14 +261,33 @@ void synthui_seven_segment_set_text(lv_obj_t *obj, const char *text)
     const size_t new_len = strlen(text);
 
     if (prev_len != new_len) {
-        /* Layout width changed -> full invalidation */
+        /* Layout length changed -> full invalidation */
         strncpy(seg->text, text, SYNTHUI_SEVEN_SEGMENT_MAX_CHARS);
         seg->text[SYNTHUI_SEVEN_SEGMENT_MAX_CHARS] = '\0';
         lv_obj_invalidate(obj);
         return;
     }
 
-    /* Same length: perform cell-level delta invalidation */
+    /* Check if character cell widths changed (punctuation vs non-punctuation).
+     * If punctuation status changes, cell coordinate positions shift -> full invalidation. */
+    bool layout_shifted = false;
+    for (size_t i = 0; i < prev_len; i++) {
+        bool prev_punct = (seg->text[i] == '.' || seg->text[i] == ':');
+        bool new_punct = (text[i] == '.' || text[i] == ':');
+        if (prev_punct != new_punct) {
+            layout_shifted = true;
+            break;
+        }
+    }
+
+    if (layout_shifted) {
+        strncpy(seg->text, text, SYNTHUI_SEVEN_SEGMENT_MAX_CHARS);
+        seg->text[SYNTHUI_SEVEN_SEGMENT_MAX_CHARS] = '\0';
+        lv_obj_invalidate(obj);
+        return;
+    }
+
+    /* Same length and identical cell layout: perform cell-level delta invalidation */
     lv_area_t a;
     lv_obj_get_coords(obj, &a);
     const int32_t h = lv_area_get_height(&a);
@@ -327,6 +363,8 @@ bool synthui_seven_segment_get_ghost(const lv_obj_t *obj)
 void synthui_seven_segment_set_slant(lv_obj_t *obj, float slant_deg)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
+    if (slant_deg < 0.0f) slant_deg = 0.0f;
+    if (slant_deg > 14.0f) slant_deg = 14.0f;
     synthui_seven_segment_t *seg = (synthui_seven_segment_t *)obj;
     if (fabsf(seg->slant - slant_deg) < 0.01f) return;
     seg->slant = slant_deg;
