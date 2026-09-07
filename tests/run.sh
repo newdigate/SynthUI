@@ -20,3 +20,5 @@ cc -Wall -Wextra -Werror -o "$out/lamp_test" tests/lamp_test.c
 "$out/lamp_test"
 cc -Wall -Wextra -Werror -o "$out/panel_button_test" tests/panel_button_test.c
 "$out/panel_button_test"
+cc -Wall -Wextra -Werror -o "$out/seven_segment_test" tests/seven_segment_test.c
+"$out/seven_segment_test"
