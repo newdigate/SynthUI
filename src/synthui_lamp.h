@@ -7,18 +7,10 @@
 #include <lvgl.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include "synthui_lamp_math.h"
+#include "synthui_lamp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#ifndef SYNTHUI_LAMP_MATH_H
-typedef enum {
-    SYNTHUI_LAMP_SHAPE_ROUND = 0,   /* circular lamp (DC default) */
-    SYNTHUI_LAMP_SHAPE_BAR,         /* rectangular bar with rounded corners (r=2) */
-    SYNTHUI_LAMP_SHAPE_PILL,        /* pill with fully rounded ends (r=vh*0.24) */
-} synthui_lamp_shape_t;
 #endif
 
 /* Standard DC reference lamp colors (0xRRGGBB) */

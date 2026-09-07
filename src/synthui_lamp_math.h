@@ -7,16 +7,11 @@
 
 #include <stdbool.h>
 #include <math.h>
+#include "synthui_lamp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum {
-    SYNTHUI_LAMP_SHAPE_ROUND = 0,
-    SYNTHUI_LAMP_SHAPE_BAR,
-    SYNTHUI_LAMP_SHAPE_PILL,
-} synthui_lamp_shape_t;
 
 typedef struct {
     float w, h;
@@ -63,4 +58,5 @@ static inline bool synthui_lamp_compute_geom(float w, float h, synthui_lamp_shap
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif /* SYNTHUI_LAMP_MATH_H */
