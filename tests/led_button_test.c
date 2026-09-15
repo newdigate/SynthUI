@@ -11,6 +11,9 @@
  *   dy_px truncated instead of rounded          -> P.dy_px == 3
  *   cap split at 0.50                           -> approx(L.cap_top.h, 49.6f)
  *   dots threshold at 32                        -> !S.dots_visible (33 px)
+ *   circle_px ignoring dy_px                    -> the dot1 translation-equality assert (sweep, pressed)
+ *   circle_px x2 without the "- 1"              -> dot1_px0.x2 == 39 (the circle_px(&L.dot1,0) pin)
+ *   bw floor (max(1, ...)) removed               -> Bx16.bezel_bw_px == 1 (16x16 case)
  *
  * The pixel-space sweep (below) is placed BEFORE the narrow value pins so a
  * containment-breaking mutant fails there first, on a containment assert,
@@ -120,6 +123,33 @@ int main(void)
                 assert(top_px.y2 + 1 == low_px.y1);
                 assert(top_px.y1 == cap_px.y1);
                 assert(low_px.y2 == cap_px.y2);
+
+                /* pressed: every moving layer TRANSLATES by dy_px, whole
+                 * pixels, nothing else -- x1/x2 unchanged, y1/y2 each +
+                 * dy_px, checked directly against the dy=0 pixel area
+                 * (containment alone cannot see a wrong-but-still-inside
+                 * position).  bezel/well are drawn at 0, so no check here. */
+                if (pressed) {
+                    const synthui_led_button_px_t cap0  = synthui_led_button_rect_px(&Lx.cap, 0);
+                    const synthui_led_button_px_t top0  = synthui_led_button_rect_px(&Lx.cap_top, 0);
+                    const synthui_led_button_px_t low0  = synthui_led_button_rect_px(&Lx.cap_low, 0);
+                    const synthui_led_button_px_t hi0   = synthui_led_button_rect_px(&Lx.highlight, 0);
+                    const synthui_led_button_px_t halo0 = synthui_led_button_rect_px(&Lx.halo, 0);
+                    const synthui_led_button_px_t led0  = synthui_led_button_rect_px(&Lx.led, 0);
+                    const synthui_led_button_px_t base0 = synthui_led_button_rect_px(&Lx.base, 0);
+                    const synthui_led_button_px_t d1_0  = synthui_led_button_circle_px(&Lx.dot1, 0);
+                    const synthui_led_button_px_t d2_0  = synthui_led_button_circle_px(&Lx.dot2, 0);
+
+                    assert(cap_px.x1 == cap0.x1 && cap_px.x2 == cap0.x2 && cap_px.y1 == cap0.y1 + Lx.dy_px && cap_px.y2 == cap0.y2 + Lx.dy_px);
+                    assert(top_px.x1 == top0.x1 && top_px.x2 == top0.x2 && top_px.y1 == top0.y1 + Lx.dy_px && top_px.y2 == top0.y2 + Lx.dy_px);
+                    assert(low_px.x1 == low0.x1 && low_px.x2 == low0.x2 && low_px.y1 == low0.y1 + Lx.dy_px && low_px.y2 == low0.y2 + Lx.dy_px);
+                    assert(hi_px.x1 == hi0.x1 && hi_px.x2 == hi0.x2 && hi_px.y1 == hi0.y1 + Lx.dy_px && hi_px.y2 == hi0.y2 + Lx.dy_px);
+                    assert(halo_px.x1 == halo0.x1 && halo_px.x2 == halo0.x2 && halo_px.y1 == halo0.y1 + Lx.dy_px && halo_px.y2 == halo0.y2 + Lx.dy_px);
+                    assert(led_px.x1 == led0.x1 && led_px.x2 == led0.x2 && led_px.y1 == led0.y1 + Lx.dy_px && led_px.y2 == led0.y2 + Lx.dy_px);
+                    assert(base_px.x1 == base0.x1 && base_px.x2 == base0.x2 && base_px.y1 == base0.y1 + Lx.dy_px && base_px.y2 == base0.y2 + Lx.dy_px);
+                    assert(d1_px.x1 == d1_0.x1 && d1_px.x2 == d1_0.x2 && d1_px.y1 == d1_0.y1 + Lx.dy_px && d1_px.y2 == d1_0.y2 + Lx.dy_px);
+                    assert(d2_px.x1 == d2_0.x1 && d2_px.x2 == d2_0.x2 && d2_px.y1 == d2_0.y1 + Lx.dy_px && d2_px.y2 == d2_0.y2 + Lx.dy_px);
+                }
             }
         }
     }
@@ -139,6 +169,12 @@ int main(void)
     assert(approx(L.base.x, 10) && approx(L.base.y, 82) && approx(L.base.w, 80) && approx(L.base.h, 7));
     assert(approx(L.dot1.cx, 38) && approx(L.dot1.cy, 26.5f) && approx(L.dot1.r, 1.7f));
     assert(approx(L.dot2.cx, 62) && approx(L.dot2.cy, 26.5f) && approx(L.dot2.r, 1.7f));
+    /* dot1's pixel area: cx 38, cy 26.5, r 1.7 -> x1 lroundf(36.3)=36,
+     * y1 lroundf(24.8)=25, x2 lroundf(39.7)-1=39, y2 lroundf(28.2)-1=27. */
+    {
+        synthui_led_button_px_t dot1_px0 = synthui_led_button_circle_px(&L.dot1, 0);
+        assert(dot1_px0.x1 == 36 && dot1_px0.y1 == 25 && dot1_px0.x2 == 39 && dot1_px0.y2 == 27);
+    }
     assert(approx(L.bezel_r, 17) && approx(L.well_r, 13) && approx(L.cap_r, 11));
     assert(approx(L.highlight_r, 5.5f) && approx(L.halo_r, 8.5f) && approx(L.led_r, 3.5f) && approx(L.base_r, 3.5f));
     assert(L.bezel_bw_px == 2 && L.cue_bw_px == 4 && L.halo_bw_px == 10);
@@ -183,6 +219,17 @@ int main(void)
     synthui_led_button_layout_t W;
     assert(synthui_led_button_compute_layout(32.0f, 32.0f, false, &W));
     assert(W.bezel_bw_px == 1 && W.cue_bw_px == 1 && W.halo_bw_px == 3);
+
+    /* the 1 px floor itself: at 16x16 the raw bezel width rounds to 0
+     * (lroundf(2.0*0.16)=lroundf(0.32)=0) and must be floored to 1; cue and
+     * halo are already >= 1 without the floor at this size (lroundf(0.56)=1,
+     * lroundf(1.6)=2).  8x8 floors even harder (lroundf(0.16)=0). */
+    synthui_led_button_layout_t Bx16;
+    assert(synthui_led_button_compute_layout(16.0f, 16.0f, false, &Bx16));
+    assert(Bx16.bezel_bw_px == 1 && Bx16.cue_bw_px == 1 && Bx16.halo_bw_px == 2);
+    synthui_led_button_layout_t Bx8;
+    assert(synthui_led_button_compute_layout(8.0f, 8.0f, false, &Bx8));
+    assert(Bx8.bezel_bw_px == 1);
 
     /* --- non-square: an 80 px key centred with side margins on whichever
      * axis is longer --- */
