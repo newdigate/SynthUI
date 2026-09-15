@@ -13,7 +13,9 @@
  * afterwards (the acid_box edit cursor).  A programmatic
  * lv_obj_add_state/remove_state(LV_STATE_PRESSED) after the first render is
  * the caller's to invalidate; LVGL does not repaint a style-less widget on a
- * state change. */
+ * state change.  A scroll that starts on a held key clears LV_STATE_PRESSED
+ * with no event to the key; the scroll's own invalidation normally repaints
+ * it. */
 #ifndef SYNTHUI_LED_BUTTON_H
 #define SYNTHUI_LED_BUTTON_H
 
@@ -42,7 +44,9 @@ bool synthui_led_button_get_cue(const lv_obj_t *obj);
 /* Greys the cap and LED, suppresses the halo, sets LV_STATE_DISABLED
  * (clearing any press) and clears LV_OBJ_FLAG_CLICKABLE; restored on
  * re-enable. A key disabled by lv_obj_add_state(LV_STATE_DISABLED) also
- * draws grey; the caller then owns its invalidation. */
+ * draws grey; the caller then owns its invalidation.  Disable on
+ * LV_EVENT_PRESSED, not RELEASED, to suppress the click: LVGL decides
+ * whether to send CLICKED before it sends RELEASED. */
 void synthui_led_button_set_disabled(lv_obj_t *obj, bool disabled);
 bool synthui_led_button_get_disabled(const lv_obj_t *obj);
 
