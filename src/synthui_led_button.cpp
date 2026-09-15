@@ -1,0 +1,346 @@
+/* synthui_led_button.cpp - SynthUI LedButton, LVGL 9 custom widget.
+ * Copyright (c) 2026 Nicholas Newdigate
+ * SPDX-License-Identifier: MIT */
+#include "synthui_led_button.h"
+#include "synthui_led_button_math.h"
+#include <lvgl_private.h>
+#include <math.h>
+
+#define MY_CLASS (&synthui_led_button_class)
+
+typedef struct {
+    lv_obj_t obj;
+    synthui_led_button_color_t color;
+    bool lit;
+    bool pressed;      /* the latch */
+    bool cue;
+    bool disabled;
+} synthui_led_button_t;
+
+static void led_constructor(const lv_obj_class_t *cls, lv_obj_t *obj);
+static void led_destructor(const lv_obj_class_t *cls, lv_obj_t *obj);
+static void led_event(const lv_obj_class_t *cls, lv_event_t *e);
+static void led_draw(synthui_led_button_t *b, lv_layer_t *layer);
+
+const lv_obj_class_t synthui_led_button_class = {
+    .base_class     = &lv_obj_class,
+    .constructor_cb = led_constructor,
+    .destructor_cb  = led_destructor,
+    .event_cb       = led_event,
+    /* designators follow lv_obj_class_private.h declaration order -- name
+     * declares before width_def (the rotary's note). */
+    .name           = "synthui_led_button",
+    .width_def      = 96,       /* the DC default size */
+    .height_def     = 96,
+    .instance_size  = sizeof(synthui_led_button_t),
+};
+
+lv_obj_t *synthui_led_button_create(lv_obj_t *parent)
+{
+    lv_obj_t *obj = lv_obj_class_create_obj(&synthui_led_button_class, parent);
+    lv_obj_class_init_obj(obj);
+    return obj;
+}
+
+static void led_constructor(const lv_obj_class_t *cls, lv_obj_t *obj)
+{
+    LV_UNUSED(cls);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    b->color = SYNTHUI_LED_BUTTON_RED;
+    b->lit = b->pressed = b->cue = b->disabled = false;
+    /* CLICKABLE is the base default and taps are the whole input story;
+     * a scrollable key would swallow taps as drags (synthui_step's reasoning). */
+    lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static void led_destructor(const lv_obj_class_t *cls, lv_obj_t *obj)
+{
+    LV_UNUSED(cls);
+    LV_UNUSED(obj);
+}
+
+/* The DRAWN pressed state reads LV_STATE_PRESSED directly, not a flag kept
+ * from events: lv_obj_add_state(obj, LV_STATE_PRESSED) sends no
+ * LV_EVENT_PRESSED, and the spec requires that state to draw exactly like the
+ * latch (the gate scene pins it with key 15). */
+static bool led_drawn_pressed(const synthui_led_button_t *b)
+{
+    return b->pressed || lv_obj_has_state((const lv_obj_t *)b, LV_STATE_PRESSED);
+}
+
+/* --- pixel helpers.  ALL float->pixel rounding goes through the math
+ * header's rect_px / circle_px (the conversion the host sweep tests); this
+ * file only offsets the widget-relative result by the object's coords. --- */
+static void led_px_to_area(lv_area_t *out, const lv_area_t *c, const synthui_led_button_px_t *px)
+{
+    out->x1 = c->x1 + px->x1;
+    out->y1 = c->y1 + px->y1;
+    out->x2 = c->x1 + px->x2;
+    out->y2 = c->y1 + px->y2;
+}
+
+static void led_area(lv_area_t *out, const lv_area_t *c, const synthui_led_button_rect_t *r, int32_t dy_px)
+{
+    const synthui_led_button_px_t px = synthui_led_button_rect_px(r, dy_px);
+    led_px_to_area(out, c, &px);
+}
+
+static void led_circle_area(lv_area_t *out, const lv_area_t *c, const synthui_led_button_circle_t *k, int32_t dy_px)
+{
+    const synthui_led_button_px_t px = synthui_led_button_circle_px(k, dy_px);
+    led_px_to_area(out, c, &px);
+}
+
+static int32_t led_radius(float v)   /* radii: at least 1 px */
+{
+    const int32_t p = (int32_t)lroundf(v);
+    return p < 1 ? 1 : p;
+}
+
+static void led_invalidate_px(lv_obj_t *obj, const synthui_led_button_px_t *px)
+{
+    lv_area_t c, a;
+    lv_obj_get_coords(obj, &c);
+    led_px_to_area(&a, &c, px);
+    lv_obj_invalidate_area(obj, &a);
+}
+
+static void led_invalidate_lit_box(lv_obj_t *obj)
+{
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    lv_area_t c;
+    lv_obj_get_coords(obj, &c);
+    synthui_led_button_px_t px;
+    synthui_led_button_lit_box((float)lv_area_get_width(&c), (float)lv_area_get_height(&c),
+                               led_drawn_pressed(b), &px);
+    led_invalidate_px(obj, &px);
+}
+
+static void led_invalidate_press_box(lv_obj_t *obj)
+{
+    lv_area_t c;
+    lv_obj_get_coords(obj, &c);
+    synthui_led_button_px_t px;
+    synthui_led_button_press_box((float)lv_area_get_width(&c), (float)lv_area_get_height(&c), &px);
+    led_invalidate_px(obj, &px);
+}
+
+/* A finger went down or came up.  The press box does not depend on the press
+ * state, so the invalidation is correct whether or not the indev has already
+ * flipped LV_STATE_PRESSED when this event arrives; the draw that follows reads
+ * the settled state.  A latched key does not move, so nothing is invalidated. */
+static void led_on_press_edge(lv_obj_t *obj)
+{
+    const synthui_led_button_t *b = (const synthui_led_button_t *)obj;
+    if (b->pressed) return;
+    led_invalidate_press_box(obj);
+}
+
+static void led_event(const lv_obj_class_t *cls, lv_event_t *e)
+{
+    LV_UNUSED(cls);
+    if (lv_obj_event_base(MY_CLASS, e) != LV_RESULT_OK) return;
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    switch (lv_event_get_code(e)) {
+    case LV_EVENT_DRAW_MAIN:
+        led_draw((synthui_led_button_t *)obj, lv_event_get_layer(e));
+        break;
+    /* Transient press: the key sinks while a finger is down. */
+    case LV_EVENT_PRESSED:
+    case LV_EVENT_RELEASED:
+    case LV_EVENT_PRESS_LOST:
+        led_on_press_edge(obj);
+        break;
+    default:
+        break;
+    }
+}
+
+static void led_fill(lv_layer_t *layer, const lv_area_t *a, uint32_t hex, lv_opa_t opa, int32_t radius)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = lv_color_hex(hex);
+    d.bg_opa = opa;
+    d.radius = radius;
+    lv_draw_rect(layer, &d, a);
+}
+
+static void led_grad(lv_layer_t *layer, const lv_area_t *a, uint32_t top, uint32_t bottom, int32_t radius)
+{
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_opa = LV_OPA_COVER;
+    d.bg_grad.dir = LV_GRAD_DIR_VER;
+    d.bg_grad.stops_count = 2;
+    d.bg_grad.stops[0].color = lv_color_hex(top);
+    d.bg_grad.stops[0].opa = LV_OPA_COVER;
+    d.bg_grad.stops[0].frac = 0;
+    d.bg_grad.stops[1].color = lv_color_hex(bottom);
+    d.bg_grad.stops[1].opa = LV_OPA_COVER;
+    d.bg_grad.stops[1].frac = 255;
+    d.radius = radius;
+    lv_draw_rect(layer, &d, a);
+}
+
+static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
+{
+    lv_area_t c;
+    lv_obj_get_coords((lv_obj_t *)b, &c);
+    const int32_t w = lv_area_get_width(&c);
+    const int32_t h = lv_area_get_height(&c);
+    if (w <= 0 || h <= 0) return;
+
+    const bool pressed = led_drawn_pressed(b);
+    synthui_led_button_layout_t L;
+    if (!synthui_led_button_compute_layout((float)w, (float)h, pressed, &L)) return;
+    synthui_led_button_palette_t P;
+    synthui_led_button_palette(b->color, b->lit, pressed, b->cue, b->disabled, &P);
+
+    lv_area_t a;
+    const int32_t dy = L.dy_px;   /* whole pixels, added AFTER rounding: a press never resizes a layer */
+
+    /* 1. bezel (never moves): fill + border, the SVG stroke drawn inside the extent */
+    led_area(&a, &c, &L.bezel, 0);
+    {
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_color = lv_color_hex(SYNTHUI_LED_BUTTON_BEZEL);
+        d.bg_opa = LV_OPA_COVER;
+        d.radius = led_radius(L.bezel_r);
+        d.border_color = lv_color_hex(P.bezel_color);
+        d.border_width = b->cue ? L.cue_bw_px : L.bezel_bw_px;
+        d.border_opa = LV_OPA_COVER;
+        d.border_side = LV_BORDER_SIDE_FULL;
+        lv_draw_rect(layer, &d, &a);
+    }
+
+    /* 2. well (never moves) */
+    led_area(&a, &c, &L.well, 0);
+    led_fill(layer, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, led_radius(L.well_r));
+
+    /* 3. cap: solid mid under two 2-stop halves (LV_GRADIENT_MAX_STOPS is 2).
+     * Each half's inner corners are rounded too, but they meet the solid mid
+     * at exactly the mid colour, so the rounding is invisible. */
+    led_area(&a, &c, &L.cap, dy);
+    led_fill(layer, &a, P.cap_mid, LV_OPA_COVER, led_radius(L.cap_r));
+    led_area(&a, &c, &L.cap_top, dy);
+    led_grad(layer, &a, P.cap_top, P.cap_mid, led_radius(L.cap_r));
+    led_area(&a, &c, &L.cap_low, dy);
+    led_grad(layer, &a, P.cap_mid, P.cap_low, led_radius(L.cap_r));
+
+    /* 4. highlight */
+    led_area(&a, &c, &L.highlight, dy);
+    led_fill(layer, &a, 0xFFFFFFu, P.highlight_opa, led_radius(L.highlight_r));
+
+    /* 5. halo: a 10-unit border on the LED grown by 5; the LED fill covers
+     * the inner half, which is what SVG's stroke-over-fill produces */
+    if (P.halo_on) {
+        led_area(&a, &c, &L.halo, dy);
+        lv_draw_rect_dsc_t d;
+        lv_draw_rect_dsc_init(&d);
+        d.bg_opa = LV_OPA_TRANSP;
+        d.radius = led_radius(L.halo_r);
+        d.border_color = lv_color_hex(P.halo_color);
+        d.border_width = L.halo_bw_px;
+        d.border_opa = SYNTHUI_LED_BUTTON_HALO_OPA;
+        d.border_side = LV_BORDER_SIDE_FULL;
+        lv_draw_rect(layer, &d, &a);
+    }
+
+    /* 6. LED */
+    led_area(&a, &c, &L.led, dy);
+    led_fill(layer, &a, P.led_fill, LV_OPA_COVER, led_radius(L.led_r));
+
+    /* 7. moulding dots (dropped below 34 px) */
+    if (L.dots_visible) {
+        led_circle_area(&a, &c, &L.dot1, dy);
+        led_fill(layer, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        led_circle_area(&a, &c, &L.dot2, dy);
+        led_fill(layer, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+    }
+
+    /* 8. base */
+    led_area(&a, &c, &L.base, dy);
+    led_fill(layer, &a, SYNTHUI_LED_BUTTON_BASE, P.base_opa, led_radius(L.base_r));
+}
+
+/* --- setters: early-return on no change, invalidate only the box painted --- */
+
+void synthui_led_button_set_lit(lv_obj_t *obj, bool lit)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    if (b->lit == lit) return;
+    b->lit = lit;
+    led_invalidate_lit_box(obj);
+}
+
+bool synthui_led_button_get_lit(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_led_button_t *)obj)->lit;
+}
+
+void synthui_led_button_set_pressed(lv_obj_t *obj, bool pressed)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    if (b->pressed == pressed) return;
+    b->pressed = pressed;
+    if (lv_obj_has_state(obj, LV_STATE_PRESSED)) return;   /* finger still down: nothing moves */
+    led_invalidate_press_box(obj);
+}
+
+bool synthui_led_button_get_pressed(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_led_button_t *)obj)->pressed;
+}
+
+void synthui_led_button_set_cue(lv_obj_t *obj, bool cue)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    if (b->cue == cue) return;
+    b->cue = cue;
+    lv_obj_invalidate(obj);   /* the bezel ring is the outer edge on four sides */
+}
+
+bool synthui_led_button_get_cue(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_led_button_t *)obj)->cue;
+}
+
+void synthui_led_button_set_disabled(lv_obj_t *obj, bool disabled)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    if (b->disabled == disabled) return;
+    b->disabled = disabled;
+    if (disabled) lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    else          lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_invalidate(obj);
+}
+
+bool synthui_led_button_get_disabled(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_led_button_t *)obj)->disabled;
+}
+
+void synthui_led_button_set_color(lv_obj_t *obj, synthui_led_button_color_t color)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    synthui_led_button_t *b = (synthui_led_button_t *)obj;
+    if (b->color == color) return;
+    b->color = color;
+    led_invalidate_lit_box(obj);
+}
+
+synthui_led_button_color_t synthui_led_button_get_color(const lv_obj_t *obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    return ((const synthui_led_button_t *)obj)->color;
+}
