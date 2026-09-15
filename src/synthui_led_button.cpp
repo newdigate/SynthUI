@@ -68,6 +68,15 @@ static bool led_drawn_pressed(const synthui_led_button_t *b)
     return b->pressed || lv_obj_has_state((const lv_obj_t *)b, LV_STATE_PRESSED);
 }
 
+/* Like led_drawn_pressed: the drawn disabled state reads LV_STATE_DISABLED
+ * directly, so a key disabled by lv_obj_add_state(LV_STATE_DISABLED) alone
+ * (bypassing the setter) draws grey the same as one disabled through
+ * synthui_led_button_set_disabled(). */
+static bool led_drawn_disabled(const synthui_led_button_t *b)
+{
+    return b->disabled || lv_obj_has_state((const lv_obj_t *)b, LV_STATE_DISABLED);
+}
+
 /* --- pixel helpers.  ALL float->pixel rounding goes through the math
  * header's rect_px / circle_px (the conversion the host sweep tests); this
  * file only offsets the widget-relative result by the object's coords. --- */
@@ -145,10 +154,14 @@ static void led_event(const lv_obj_class_t *cls, lv_event_t *e)
     case LV_EVENT_DRAW_MAIN:
         led_draw((synthui_led_button_t *)obj, lv_event_get_layer(e));
         break;
-    /* Transient press: the key sinks while a finger is down. */
+    /* Transient press: the key sinks while a finger is down.  INDEV_RESET is
+     * in this group too: the base lv_obj event clears LV_STATE_PRESSED on it
+     * with no invalidation of its own (lv_obj.c), so a held key would
+     * otherwise stay drawn sunk after the indev is reset out from under it. */
     case LV_EVENT_PRESSED:
     case LV_EVENT_RELEASED:
     case LV_EVENT_PRESS_LOST:
+    case LV_EVENT_INDEV_RESET:
         led_on_press_edge(obj);
         break;
     default:
@@ -195,7 +208,7 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
     synthui_led_button_layout_t L;
     if (!synthui_led_button_compute_layout((float)w, (float)h, pressed, &L)) return;
     synthui_led_button_palette_t P;
-    synthui_led_button_palette(b->color, b->lit, pressed, b->cue, b->disabled, &P);
+    synthui_led_button_palette(b->color, b->lit, pressed, b->cue, led_drawn_disabled(b), &P);
 
     lv_area_t a;
     const int32_t dy = L.dy_px;   /* whole pixels, added AFTER rounding: a press never resizes a layer */
@@ -220,8 +233,12 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
     led_fill(layer, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, led_radius(L.well_r));
 
     /* 3. cap: solid mid under two 2-stop halves (LV_GRADIENT_MAX_STOPS is 2).
-     * Each half's inner corners are rounded too, but they meet the solid mid
-     * at exactly the mid colour, so the rounding is invisible. */
+     * LVGL rounds all four corners of EACH half, not just the outer two, so
+     * the inner-corner wedges show the solid mid fill through a gradient
+     * that at that point is within a few colour levels of mid, and the two
+     * halves double-composite the cap's outer antialiased edge on top of the
+     * solid layer's.  Both are deterministic, visually negligible, and
+     * pinned by the golden -- not an approximation being waved away. */
     led_area(&a, &c, &L.cap, dy);
     led_fill(layer, &a, P.cap_mid, LV_OPA_COVER, led_radius(L.cap_r));
     led_area(&a, &c, &L.cap_top, dy);
@@ -319,9 +336,15 @@ void synthui_led_button_set_disabled(lv_obj_t *obj, bool disabled)
     synthui_led_button_t *b = (synthui_led_button_t *)obj;
     if (b->disabled == disabled) return;
     b->disabled = disabled;
-    if (disabled) lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE);
-    else          lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_invalidate(obj);
+    if (disabled) {
+        lv_obj_remove_state(obj, LV_STATE_PRESSED);
+        lv_obj_add_state(obj, LV_STATE_DISABLED);
+        lv_obj_remove_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    } else {
+        lv_obj_remove_state(obj, LV_STATE_DISABLED);
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    }
+    lv_obj_invalidate(obj);   /* covers the press-state repaint too */
 }
 
 bool synthui_led_button_get_disabled(const lv_obj_t *obj)
