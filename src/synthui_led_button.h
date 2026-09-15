@@ -45,8 +45,11 @@ bool synthui_led_button_get_cue(const lv_obj_t *obj);
  * (clearing any press) and clears LV_OBJ_FLAG_CLICKABLE; restored on
  * re-enable. A key disabled by lv_obj_add_state(LV_STATE_DISABLED) also
  * draws grey; the caller then owns its invalidation.  Disable on
- * LV_EVENT_PRESSED, not RELEASED, to suppress the click: LVGL decides
- * whether to send CLICKED before it sends RELEASED. */
+ * LV_EVENT_PRESSED, not RELEASED, to suppress the click: LVGL sends
+ * RELEASED then CLICKED, but it snapshots is_enabled ONCE, before RELEASED
+ * is dispatched, and reuses that snapshot to gate CLICKED too
+ * (lv_indev.c, indev_proc_release() ~line 1453) -- so disabling the object
+ * from its own RELEASED handler is already too late to stop the click. */
 void synthui_led_button_set_disabled(lv_obj_t *obj, bool disabled);
 bool synthui_led_button_get_disabled(const lv_obj_t *obj);
 

@@ -66,10 +66,11 @@ typedef struct {
      * the normal stroke and the "cue" stroke: the cue is a WIDER border
      * drawn on the identical rect/radius (LVGL draws borders inside the
      * area, so the wider cue stroke is clamped inward rather than growing
-     * the ring past the bezel).  At side <= 34 px, max(1, lroundf(2.0*s))
-     * and max(1, lroundf(3.5*s)) both round to 1 px, so on the smallest
-     * legal key the cue reduces to a colour change only -- there is no
-     * width left to show it. */
+     * the ring past the bezel).  cue_bw_px = max(1, lroundf(3.5*s)) does not
+     * reach 2 px until s >= 0.4286 (3.5*s < 1.5 below that) -- i.e. every
+     * side below ~43 px, not just the 34 px dot-dropout threshold this
+     * comment used to (wrongly) cite -- so on those keys the cue reduces to
+     * a colour change only; there is no width left to show it. */
     int32_t bezel_bw_px;    /* max(1, lroundf(2.0  * s)) */
     int32_t cue_bw_px;      /* max(1, lroundf(3.5  * s)) */
     int32_t halo_bw_px;     /* max(1, lroundf(2 * HALO_REACH * s)) */
@@ -82,6 +83,7 @@ typedef struct {
     uint32_t halo_color;
     bool     halo_on;
     uint32_t bezel_color;
+    bool     cue_border;   /* single source for the bezel's width AND colour decision */
 } synthui_led_button_palette_t;
 
 static inline uint32_t synthui_led_button_color_on(synthui_led_button_color_t c)
@@ -253,6 +255,7 @@ static inline void synthui_led_button_palette(synthui_led_button_color_t color,
     p->halo_color    = synthui_led_button_color_on(color);
     p->halo_on       = lit && !disabled;
     p->bezel_color   = cue ? SYNTHUI_LED_BUTTON_CUE_STROKE : SYNTHUI_LED_BUTTON_BEZEL_STROKE;
+    p->cue_border    = cue;   /* the widget reads THIS, not b->cue, to pick L.cue_bw_px vs L.bezel_bw_px */
 }
 
 #ifdef __cplusplus

@@ -222,7 +222,7 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
         d.bg_opa = LV_OPA_COVER;
         d.radius = led_radius(L.bezel_r);
         d.border_color = lv_color_hex(P.bezel_color);
-        d.border_width = b->cue ? L.cue_bw_px : L.bezel_bw_px;
+        d.border_width = P.cue_border ? L.cue_bw_px : L.bezel_bw_px;  /* same source as bezel_color */
         d.border_opa = LV_OPA_COVER;
         d.border_side = LV_BORDER_SIDE_FULL;
         lv_draw_rect(layer, &d, &a);
