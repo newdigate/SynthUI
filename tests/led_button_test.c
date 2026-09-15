@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  *
  * Every guard here was shown RED against a mutant before it was trusted:
- *   press box ignoring dy      -> "press box must cover the base at both offsets"
- *   lit box omitting the halo  -> "lit box must contain the halo"
- *   cap split at 0.50          -> "cap split sits at 62 %"
- *   dots threshold at 32       -> "dots drop out below 34 px" */
+ *   press box height 82.5 -> 80      -> "approx(pb.h, 82.5f)"
+ *   lit box returning the bare LED   -> "approx(lb.x, 21)" (the lit-box value block)
+ *   cap split at 0.50                -> "approx(L.cap_top.h, 49.6f)"
+ *   dots threshold at 32             -> "!S.dots_visible" (the 33 px case) */
 #undef NDEBUG
 #include "../src/synthui_led_button_math.h"
 #include <assert.h>
@@ -91,9 +91,11 @@ int main(void)
     synthui_led_button_lit_box(100.0f, 100.0f, false, &lb);
     assert(approx(lb.x, 21) && approx(lb.y, 14) && approx(lb.w, 58) && approx(lb.h, 25));
     assert(rect_contains(&lb, &L.led) && rect_contains(&lb, &L.halo));
+    assert(rect_contains(&L.bezel, &lb));
     synthui_led_button_lit_box(100.0f, 100.0f, true, &lb);
     assert(approx(lb.y, 16.5f));
     assert(rect_contains(&lb, &P.led) && rect_contains(&lb, &P.halo));
+    assert(rect_contains(&P.bezel, &lb));
     /* press box covers every moving layer at BOTH offsets, and lies in the key */
     synthui_led_button_rect_t pb;
     synthui_led_button_press_box(100.0f, 100.0f, &pb);
