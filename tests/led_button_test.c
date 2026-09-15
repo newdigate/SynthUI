@@ -3,11 +3,18 @@
  * Copyright (c) 2026 Nicholas Newdigate
  * SPDX-License-Identifier: MIT
  *
- * Every guard here was shown RED against a mutant before it was trusted:
- *   press box height 82.5 -> 80      -> "approx(pb.h, 82.5f)"
- *   lit box returning the bare LED   -> "approx(lb.x, 21)" (the lit-box value block)
- *   cap split at 0.50                -> "approx(L.cap_top.h, 49.6f)"
- *   dots threshold at 32             -> "!S.dots_visible" (the 33 px case) */
+ * Every guard here was shown RED against a mutant before it was trusted,
+ * and each line below names the assert that ACTUALLY failed, as measured:
+ *   press_box dropping the pressed offset       -> px_contains(&press_pb, &cap_px)   (sweep, size 8, pressed)
+ *   compute_layout with oy forced to 0          -> approx(M.oy, 20.0f)               (the 80x120 case)
+ *   lit_box ignoring `pressed`                  -> px_contains(&lit_lb, &halo_px)    (sweep, size 20, pressed)
+ *   dy_px truncated instead of rounded          -> P.dy_px == 3
+ *   cap split at 0.50                           -> approx(L.cap_top.h, 49.6f)
+ *   dots threshold at 32                        -> !S.dots_visible (33 px)
+ *
+ * The pixel-space sweep (below) is placed BEFORE the narrow value pins so a
+ * containment-breaking mutant fails there first, on a containment assert,
+ * rather than on some later unrelated pin. */
 #undef NDEBUG
 #include "../src/synthui_led_button_math.h"
 #include <assert.h>
@@ -16,22 +23,112 @@
 
 static int approx(float a, float b) { return fabsf(a - b) < 0.01f; }
 
-static int rect_contains(const synthui_led_button_rect_t *outer,
-                         const synthui_led_button_rect_t *inner)
+static int rect_eq(const synthui_led_button_rect_t *a, const synthui_led_button_rect_t *b)
 {
-    return inner->x >= outer->x - 0.001f && inner->y >= outer->y - 0.001f &&
-           inner->x + inner->w <= outer->x + outer->w + 0.001f &&
-           inner->y + inner->h <= outer->y + outer->h + 0.001f;
+    return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
+}
+
+static int circ_eq(const synthui_led_button_circle_t *a, const synthui_led_button_circle_t *b)
+{
+    return a->cx == b->cx && a->cy == b->cy && a->r == b->r;
+}
+
+/* A rounded rect can land empty at very small sizes (x2 < x1 or y2 < y1 --
+ * e.g. at 8 px the base rounds to y1=7, y2=6).  An empty area draws
+ * nothing and needs no damage, so it is trivially "contained". */
+static int px_empty(const synthui_led_button_px_t *r)
+{
+    return r->x2 < r->x1 || r->y2 < r->y1;
+}
+
+static int px_contains(const synthui_led_button_px_t *outer, const synthui_led_button_px_t *inner)
+{
+    return px_empty(inner) ||
+           (inner->x1 >= outer->x1 && inner->y1 >= outer->y1 &&
+            inner->x2 <= outer->x2 && inner->y2 <= outer->y2);
 }
 
 int main(void)
 {
-    synthui_led_button_layout_t L;
+    /* --- pixel-space sweep: containment invariants across scale, aspect
+     * ratio and press state.  This replaces reliance on the old float
+     * rect_contains: every box here is the ACTUAL rounded pixel area the
+     * widget would draw. --- */
+    {
+        static const float nonsquare[][2] = {
+            {120.0f, 80.0f}, {80.0f, 120.0f}, {150.0f, 100.0f}, {56.0f, 56.0f}
+        };
+        int shape;
+        for (shape = 0; shape < 393 + 4; ++shape) {
+            float sw, sh;
+            if (shape < 393) { sw = sh = (float)(8 + shape); }
+            else             { sw = nonsquare[shape - 393][0]; sh = nonsquare[shape - 393][1]; }
+
+            int pr;
+            for (pr = 0; pr < 2; ++pr) {
+                bool pressed = pr != 0;
+                synthui_led_button_layout_t Lx;
+                assert(synthui_led_button_compute_layout(sw, sh, pressed, &Lx));
+
+                synthui_led_button_px_t press_pb, lit_lb;
+                synthui_led_button_press_box(sw, sh, &press_pb);
+                synthui_led_button_lit_box(sw, sh, pressed, &lit_lb);
+
+                const synthui_led_button_px_t bounds = { 0, 0, (int32_t)sw - 1, (int32_t)sh - 1 };
+
+                synthui_led_button_px_t cap_px   = synthui_led_button_rect_px(&Lx.cap, Lx.dy_px);
+                synthui_led_button_px_t top_px   = synthui_led_button_rect_px(&Lx.cap_top, Lx.dy_px);
+                synthui_led_button_px_t low_px   = synthui_led_button_rect_px(&Lx.cap_low, Lx.dy_px);
+                synthui_led_button_px_t hi_px    = synthui_led_button_rect_px(&Lx.highlight, Lx.dy_px);
+                synthui_led_button_px_t halo_px  = synthui_led_button_rect_px(&Lx.halo, Lx.dy_px);
+                synthui_led_button_px_t led_px   = synthui_led_button_rect_px(&Lx.led, Lx.dy_px);
+                synthui_led_button_px_t base_px  = synthui_led_button_rect_px(&Lx.base, Lx.dy_px);
+                synthui_led_button_px_t d1_px    = synthui_led_button_circle_px(&Lx.dot1, Lx.dy_px);
+                synthui_led_button_px_t d2_px    = synthui_led_button_circle_px(&Lx.dot2, Lx.dy_px);
+                synthui_led_button_px_t bezel_px = synthui_led_button_rect_px(&Lx.bezel, 0);
+                synthui_led_button_px_t well_px  = synthui_led_button_rect_px(&Lx.well, 0);
+
+                /* every moving layer, at this press state, lies in press_box */
+                assert(px_contains(&press_pb, &cap_px));
+                assert(px_contains(&press_pb, &top_px));
+                assert(px_contains(&press_pb, &low_px));
+                assert(px_contains(&press_pb, &hi_px));
+                assert(px_contains(&press_pb, &halo_px));
+                assert(px_contains(&press_pb, &led_px));
+                assert(px_contains(&press_pb, &base_px));
+                assert(px_contains(&press_pb, &d1_px));
+                assert(px_contains(&press_pb, &d2_px));
+
+                /* led and halo lie inside lit_box(pressed) */
+                assert(px_contains(&lit_lb, &led_px));
+                assert(px_contains(&lit_lb, &halo_px));
+
+                /* lit_box lies inside press_box */
+                assert(px_contains(&press_pb, &lit_lb));
+
+                /* everything drawn lies inside the widget */
+                assert(px_contains(&bounds, &press_pb));
+                assert(px_contains(&bounds, &lit_lb));
+                assert(px_contains(&bounds, &bezel_px));
+                assert(px_contains(&bounds, &well_px));
+                assert(px_contains(&bounds, &cap_px));
+                assert(px_contains(&bounds, &base_px));
+
+                /* cap_top and cap_low meet exactly and together span cap --
+                 * an exact equality (not a containment check), so it is
+                 * unaffected by emptiness. */
+                assert(top_px.y2 + 1 == low_px.y1);
+                assert(top_px.y1 == cap_px.y1);
+                assert(low_px.y2 == cap_px.y2);
+            }
+        }
+    }
 
     /* --- 100x100, unpressed: the DC box in pixels, 1 unit = 1 px --- */
+    synthui_led_button_layout_t L;
     assert(synthui_led_button_compute_layout(100.0f, 100.0f, false, &L));
     assert(approx(L.s, 1.0f) && approx(L.ox, 0.0f) && approx(L.oy, 0.0f));
-    assert(approx(L.dy, 0.0f));
+    assert(L.dy_px == 0);
     assert(L.dots_visible);
     assert(approx(L.bezel.x, 0) && approx(L.bezel.y, 0) && approx(L.bezel.w, 100) && approx(L.bezel.h, 100));
     assert(approx(L.well.x, 7) && approx(L.well.y, 6) && approx(L.well.w, 86) && approx(L.well.h, 88));
@@ -44,6 +141,7 @@ int main(void)
     assert(approx(L.dot2.cx, 62) && approx(L.dot2.cy, 26.5f) && approx(L.dot2.r, 1.7f));
     assert(approx(L.bezel_r, 17) && approx(L.well_r, 13) && approx(L.cap_r, 11));
     assert(approx(L.highlight_r, 5.5f) && approx(L.halo_r, 8.5f) && approx(L.led_r, 3.5f) && approx(L.base_r, 3.5f));
+    assert(L.bezel_bw_px == 2 && L.cue_bw_px == 4 && L.halo_bw_px == 10);
 
     /* cap split sits at 62 % and the two halves tile the cap exactly */
     assert(approx(L.cap_top.y, 9) && approx(L.cap_top.h, 49.6f));
@@ -53,28 +151,52 @@ int main(void)
     assert(approx(L.cap_top.x, L.cap.x) && approx(L.cap_top.w, L.cap.w));
     assert(approx(L.cap_low.x, L.cap.x) && approx(L.cap_low.w, L.cap.w));
 
-    /* --- pressed: dy = 2.5, only the cap group moves --- */
+    /* --- pressed: dy_px = 3 (lroundf(2.5) rounds away from zero); a press
+     * TRANSLATES -- every rect/circle is bit-identical to the unpressed one,
+     * the offset lives only in dy_px. --- */
     synthui_led_button_layout_t P;
     assert(synthui_led_button_compute_layout(100.0f, 100.0f, true, &P));
-    assert(approx(P.dy, 2.5f));
-    assert(approx(P.bezel.y, L.bezel.y) && approx(P.well.y, L.well.y));
-    assert(approx(P.cap.y, 11.5f) && approx(P.cap_top.y, 11.5f) && approx(P.cap_low.y, 61.1f));
-    assert(approx(P.highlight.y, 14.5f) && approx(P.led.y, 21.5f) && approx(P.halo.y, 16.5f));
-    assert(approx(P.base.y, 84.5f) && approx(P.dot1.cy, 29.0f) && approx(P.dot2.cy, 29.0f));
+    assert(P.dy_px == 3);
+    assert(rect_eq(&P.bezel, &L.bezel) && rect_eq(&P.well, &L.well));
+    assert(rect_eq(&P.cap, &L.cap) && rect_eq(&P.cap_top, &L.cap_top) && rect_eq(&P.cap_low, &L.cap_low));
+    assert(rect_eq(&P.highlight, &L.highlight) && rect_eq(&P.halo, &L.halo) && rect_eq(&P.led, &L.led));
+    assert(rect_eq(&P.base, &L.base));
+    assert(circ_eq(&P.dot1, &L.dot1) && circ_eq(&P.dot2, &L.dot2));
 
-    /* --- scaling: 200x200 doubles everything, 2.5 units -> 5 px --- */
+    /* --- 96x96 pressed: dy_px = lroundf(2.4) = 2 (the case that split the
+     * layers under the old float-dy design) --- */
+    synthui_led_button_layout_t Qz;
+    assert(synthui_led_button_compute_layout(96.0f, 96.0f, true, &Qz));
+    assert(Qz.dy_px == 2);
+
+    /* --- scaling: 200x200 doubles everything; rects stay at dy = 0, dy_px
+     * scales to 5 --- */
     synthui_led_button_layout_t D;
     assert(synthui_led_button_compute_layout(200.0f, 200.0f, true, &D));
-    assert(approx(D.s, 2.0f) && approx(D.dy, 5.0f));
-    assert(approx(D.led.x, 52) && approx(D.led.y, 43) && approx(D.led.w, 96) && approx(D.led.h, 30));
+    assert(approx(D.s, 2.0f) && D.dy_px == 5);
+    assert(approx(D.led.x, 52) && approx(D.led.y, 38) && approx(D.led.w, 96) && approx(D.led.h, 30));
     assert(approx(D.cap_r, 22) && approx(D.dot1.r, 3.4f));
 
-    /* --- non-square 120x80: an 80 px key centred with 20 px side margins --- */
+    /* --- border widths in whole px --- */
+    assert(approx(L.s, 1.0f));   /* L is still the 100x100 unpressed layout */
+    assert(L.bezel_bw_px == 2 && L.cue_bw_px == 4 && L.halo_bw_px == 10);
+    synthui_led_button_layout_t W;
+    assert(synthui_led_button_compute_layout(32.0f, 32.0f, false, &W));
+    assert(W.bezel_bw_px == 1 && W.cue_bw_px == 1 && W.halo_bw_px == 3);
+
+    /* --- non-square: an 80 px key centred with side margins on whichever
+     * axis is longer --- */
     synthui_led_button_layout_t N;
     assert(synthui_led_button_compute_layout(120.0f, 80.0f, false, &N));
     assert(approx(N.s, 0.8f) && approx(N.ox, 20.0f) && approx(N.oy, 0.0f));
     assert(approx(N.bezel.x, 20) && approx(N.bezel.w, 80) && approx(N.bezel.h, 80));
     assert(approx(N.led.x, 20 + 26 * 0.8f));
+
+    synthui_led_button_layout_t M;
+    assert(synthui_led_button_compute_layout(80.0f, 120.0f, false, &M));
+    assert(approx(M.s, 0.8f) && approx(M.ox, 0.0f) && approx(M.oy, 20.0f));
+    assert(approx(M.bezel.y, 20));
+    assert(approx(M.led.y, 20 + 19 * 0.8f));
 
     /* --- dots drop out below 34 px --- */
     synthui_led_button_layout_t S;
@@ -85,28 +207,16 @@ int main(void)
     assert(synthui_led_button_compute_layout(120.0f, 33.0f, false, &S));   /* min side rules */
     assert(!S.dots_visible);
 
-    /* --- damage boxes --- */
-    /* lit box == halo box, at the CURRENT press offset, and contains the LED */
-    synthui_led_button_rect_t lb;
+    /* --- damage boxes, pixel space, at 100x100 --- */
+    synthui_led_button_px_t lb;
     synthui_led_button_lit_box(100.0f, 100.0f, false, &lb);
-    assert(approx(lb.x, 21) && approx(lb.y, 14) && approx(lb.w, 58) && approx(lb.h, 25));
-    assert(rect_contains(&lb, &L.led) && rect_contains(&lb, &L.halo));
-    assert(rect_contains(&L.bezel, &lb));
+    assert(lb.x1 == 21 && lb.y1 == 14 && lb.x2 == 78 && lb.y2 == 38);
     synthui_led_button_lit_box(100.0f, 100.0f, true, &lb);
-    assert(approx(lb.y, 16.5f));
-    assert(rect_contains(&lb, &P.led) && rect_contains(&lb, &P.halo));
-    assert(rect_contains(&P.bezel, &lb));
-    /* press box covers every moving layer at BOTH offsets, and lies in the key */
-    synthui_led_button_rect_t pb;
+    assert(lb.x1 == 21 && lb.y1 == 17 && lb.x2 == 78 && lb.y2 == 41);
+
+    synthui_led_button_px_t pb;
     synthui_led_button_press_box(100.0f, 100.0f, &pb);
-    assert(approx(pb.x, 10) && approx(pb.y, 9) && approx(pb.w, 80) && approx(pb.h, 82.5f));
-    assert(rect_contains(&pb, &L.cap) && rect_contains(&pb, &P.cap));
-    assert(rect_contains(&pb, &L.highlight) && rect_contains(&pb, &P.highlight));
-    assert(rect_contains(&pb, &L.halo) && rect_contains(&pb, &P.halo));
-    assert(rect_contains(&pb, &L.base) && rect_contains(&pb, &P.base));   /* "press box must cover the base at both offsets" */
-    assert(rect_contains(&L.bezel, &pb));
-    synthui_led_button_press_box(200.0f, 200.0f, &pb);
-    assert(approx(pb.h, 165.0f));
+    assert(pb.x1 == 10 && pb.y1 == 9 && pb.x2 == 89 && pb.y2 == 91);
 
     /* --- colour table --- */
     assert(synthui_led_button_color_on(SYNTHUI_LED_BUTTON_RED)   == 0xFF3B30u);
@@ -125,7 +235,7 @@ int main(void)
     assert(p.cap_top == 0xF7F5F1u && p.cap_mid == 0xE8E6E1u && p.cap_low == 0xC9C7C1u);
     assert(p.highlight_opa == 140 && p.base_opa == 217);
     assert(p.led_fill == 0x5E2B28u && !p.halo_on);
-    assert(p.bezel_color == 0x3A3A3Du && approx(p.bezel_w_units, 2.0f));
+    assert(p.bezel_color == 0x3A3A3Du);
 
     synthui_led_button_palette(SYNTHUI_LED_BUTTON_AMBER, true, false, false, false, &p);
     assert(p.led_fill == 0xFFA41Fu && p.halo_on && p.halo_color == 0xFFA41Fu);
@@ -136,7 +246,7 @@ int main(void)
     assert(p.halo_on);                                   /* pressed keeps the halo */
 
     synthui_led_button_palette(SYNTHUI_LED_BUTTON_RED, false, false, true, false, &p);
-    assert(p.bezel_color == 0xFF3B30u && approx(p.bezel_w_units, 3.5f));
+    assert(p.bezel_color == 0xFF3B30u);
 
     synthui_led_button_palette(SYNTHUI_LED_BUTTON_GREEN, true, false, true, true, &p);
     assert(p.cap_top == 0xE2E1DEu && p.cap_mid == 0xD2D1CEu && p.cap_low == 0xBCBBB8u);
@@ -150,6 +260,12 @@ int main(void)
     /* --- degenerate sizes --- */
     assert(!synthui_led_button_compute_layout(0.0f, 100.0f, false, &L));
     assert(!synthui_led_button_compute_layout(100.0f, -1.0f, false, &L));
+
+    synthui_led_button_px_t zb;
+    synthui_led_button_lit_box(0.0f, 100.0f, false, &zb);
+    assert(zb.x1 == 0 && zb.y1 == 0 && zb.x2 == 0 && zb.y2 == 0);
+    synthui_led_button_press_box(0.0f, 100.0f, &zb);
+    assert(zb.x1 == 0 && zb.y1 == 0 && zb.x2 == 0 && zb.y2 == 0);
 
     printf("led_button_test: all PASS\n");
     return 0;
