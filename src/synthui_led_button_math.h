@@ -36,6 +36,7 @@ extern "C" {
 #define SYNTHUI_LED_BUTTON_HALO_REACH  5.0f    /* units the halo extends past the LED */
 #define SYNTHUI_LED_BUTTON_CAP_SPLIT   0.62f   /* top->mid over the first 62 % of the cap */
 #define SYNTHUI_LED_BUTTON_DOTS_MIN_PX 34.0f   /* the sheet: below 34 px the dots drop out */
+#define SYNTHUI_LED_BUTTON_CUE_MARGIN_PX 1     /* NEW-50: antialiasing slack on the ring's inner edge */
 
 /* 8-bit opacities from the DC alphas (x255, rounded) */
 #define SYNTHUI_LED_BUTTON_WELL_OPA        230   /* 0.90 */
@@ -146,6 +147,14 @@ static inline synthui_led_button_px_t synthui_led_button_circle_px(
     return px;
 }
 
+/* Radii: at least 1 px.  The widget's ONE radius conversion, kept here so
+ * the cue band (below) is sized from the radius LVGL is actually given. */
+static inline int32_t synthui_led_button_radius_px(float r)
+{
+    const int32_t p = (int32_t)lroundf(r);
+    return p < 1 ? 1 : p;
+}
+
 static inline bool synthui_led_button_compute_layout(float w, float h, bool pressed,
                                                      synthui_led_button_layout_t *L)
 {
@@ -239,6 +248,51 @@ static inline void synthui_led_button_press_box(float w, float h, synthui_led_bu
     if (halo0.y1 < y1) y1 = halo0.y1;
     out->y1 = y1;
     out->y2 = cap_p.y2 > base_p.y2 ? cap_p.y2 : base_p.y2;
+}
+
+/* Damage for a cue change (NEW-50): the bezel's border ring as FOUR
+ * NON-OVERLAPPING strips -- out[0] top and out[1] bottom full width, out[2]
+ * left and out[3] right the rows between them.  Inclusive widget-relative
+ * pixels like lit_box()/press_box(); the bezel never moves, so no dy_px.
+ *
+ * The ring reaches bw inward on the flats but R - (R-bw)/sqrt(2) on each
+ * corner diagonal, and every ring pixel has min(dx,dy) <= that -- which is
+ * exactly what four strips of that depth cover.  R and bw are the ROUNDED
+ * pixel values the draw uses (lv_draw_sw_border: rout = radius clamped to
+ * half the short side, rin = max(rout - width, 0)); sizing from units would
+ * not guarantee coverage.  cue_bw_px >= bezel_bw_px at every scale (lroundf
+ * is monotone, 3.5s >= 2s, both floored at 1), so the band covers the narrow
+ * ring being left as well as the wide one entered.  +MARGIN is antialiasing
+ * slack; the gate's delta-equality guard is what validates it.
+ * A whole-key box also covers the ring -- led_button_test asserts the four
+ * boxes stay under 45 % of the key from 64 px up, or a regression to
+ * whole-key damage would pass coverage.
+ * Spec: docs/superpowers/specs/2026-09-16-led-button-cue-damage-design.md */
+static inline void synthui_led_button_cue_boxes(float w, float h, synthui_led_button_px_t out[4])
+{
+    synthui_led_button_layout_t L;
+    int i;
+    if (!synthui_led_button_compute_layout(w, h, false, &L)) {
+        for (i = 0; i < 4; ++i) { out[i].x1 = out[i].y1 = out[i].x2 = out[i].y2 = 0; }
+        return;
+    }
+    const synthui_led_button_px_t bz = synthui_led_button_rect_px(&L.bezel, 0);
+    const int32_t bw_px = bz.x2 - bz.x1 + 1;
+    const int32_t bh_px = bz.y2 - bz.y1 + 1;
+    const int32_t side  = bw_px < bh_px ? bw_px : bh_px;
+
+    int32_t R = synthui_led_button_radius_px(L.bezel_r);
+    if (R > side / 2) R = side / 2;
+    const int32_t bw    = L.cue_bw_px;
+    const int32_t inner = R - bw > 0 ? R - bw : 0;
+    int32_t band = (int32_t)ceilf((float)R - (float)inner / sqrtf(2.0f)) + SYNTHUI_LED_BUTTON_CUE_MARGIN_PX;
+    if (band < bw + SYNTHUI_LED_BUTTON_CUE_MARGIN_PX) band = bw + SYNTHUI_LED_BUTTON_CUE_MARGIN_PX;
+    if (band > side / 2) band = side / 2;   /* tiny keys: top+bottom alone tile the bezel */
+
+    out[0].x1 = bz.x1;            out[0].y1 = bz.y1;            out[0].x2 = bz.x2;            out[0].y2 = bz.y1 + band - 1;   /* top */
+    out[1].x1 = bz.x1;            out[1].y1 = bz.y2 - band + 1; out[1].x2 = bz.x2;            out[1].y2 = bz.y2;              /* bottom */
+    out[2].x1 = bz.x1;            out[2].y1 = bz.y1 + band;     out[2].x2 = bz.x1 + band - 1; out[2].y2 = bz.y2 - band;       /* left */
+    out[3].x1 = bz.x2 - band + 1; out[3].y1 = bz.y1 + band;     out[3].x2 = bz.x2;            out[3].y2 = bz.y2 - band;       /* right */
 }
 
 static inline void synthui_led_button_palette(synthui_led_button_color_t color,

@@ -14,6 +14,9 @@
  *   circle_px ignoring dy_px                    -> the dot1 translation-equality assert (sweep, pressed)
  *   circle_px x2 without the "- 1"              -> dot1_px0.x2 == 39 (the circle_px(&L.dot1,0) pin)
  *   bw floor (max(1, ...)) removed               -> Bx16.bezel_bw_px == 1 (16x16 case)
+ *   cue_boxes corner term dropped (band = bw+1)  -> the ring-coverage px_has assert (sweep, size 16)
+ *   cue_boxes band = whole key                   -> the 45 % engagement assert (size 64)
+ *   cue_boxes built from (0,0,side,side), no ox  -> the box-in-bezel px_contains assert, FIRST non-square shape (120x80) ONLY -- every square size (16..200) passes
  *
  * The pixel-space sweep (below) is placed BEFORE the narrow value pins so a
  * containment-breaking mutant fails there first, on a containment assert,
@@ -49,6 +52,37 @@ static int px_contains(const synthui_led_button_px_t *outer, const synthui_led_b
     return px_empty(inner) ||
            (inner->x1 >= outer->x1 && inner->y1 >= outer->y1 &&
             inner->x2 <= outer->x2 && inner->y2 <= outer->y2);
+}
+
+/* Model of LVGL's rounded-rect mask as lv_draw_sw_border.c applies it:
+ * rout = radius clamped to half the short side, area_inner = coords inset
+ * by the border width, rin = max(rout - width, 0).  A pixel is inside when
+ * its CENTRE lies in the rect and, within a corner square of side r, within
+ * r of that corner's arc centre.  Antialiasing is handled by the caller
+ * dilating the ring by one pixel, not by this predicate. */
+static int in_rrect(int x, int y, const synthui_led_button_px_t *a, int r)
+{
+    if (x < a->x1 || x > a->x2 || y < a->y1 || y > a->y2) return 0;
+    if (r <= 0) return 1;
+    float cx, cy;
+    if      (x < a->x1 + r && y < a->y1 + r) { cx = (float)(a->x1 + r);     cy = (float)(a->y1 + r); }
+    else if (x > a->x2 - r && y < a->y1 + r) { cx = (float)(a->x2 + 1 - r); cy = (float)(a->y1 + r); }
+    else if (x < a->x1 + r && y > a->y2 - r) { cx = (float)(a->x1 + r);     cy = (float)(a->y2 + 1 - r); }
+    else if (x > a->x2 - r && y > a->y2 - r) { cx = (float)(a->x2 + 1 - r); cy = (float)(a->y2 + 1 - r); }
+    else return 1;
+    const float dx = (float)x + 0.5f - cx, dy = (float)y + 0.5f - cy;
+    return dx * dx + dy * dy <= (float)r * (float)r;
+}
+
+static int px_has(const synthui_led_button_px_t *b, int x, int y)
+{
+    return !px_empty(b) && x >= b->x1 && x <= b->x2 && y >= b->y1 && y <= b->y2;
+}
+
+static int px_overlap(const synthui_led_button_px_t *a, const synthui_led_button_px_t *b)
+{
+    if (px_empty(a) || px_empty(b)) return 0;
+    return a->x1 <= b->x2 && b->x1 <= a->x2 && a->y1 <= b->y2 && b->y1 <= a->y2;
 }
 
 int main(void)
@@ -152,6 +186,88 @@ int main(void)
                 }
             }
         }
+    }
+
+    /* --- NEW-50: cue_boxes() covers the bezel ring, and only about a third
+     * of the key.  Coverage is checked PIXEL BY PIXEL against a model of the
+     * border mask LVGL actually applies, dilated one pixel for antialiasing,
+     * for BOTH ring widths (a cue change repaints the narrow ring it leaves
+     * as well as the wide one it enters).  Coverage alone is satisfied by
+     * a whole-key box, so engagement is asserted separately (the NEW-25
+     * lesson); it is asserted only from 64 px up, because on a 32 px key a
+     * 4 px band is legitimately a large fraction of the key. --- */
+    {
+        static const float cue_nonsquare[][2] = {
+            {120.0f, 80.0f}, {80.0f, 120.0f}, {150.0f, 100.0f}, {100.0f, 150.0f}
+        };
+        int shape;
+        for (shape = 0; shape < 185 + 4; ++shape) {
+            float sw, sh;
+            if (shape < 185) { sw = sh = (float)(16 + shape); }
+            else             { sw = cue_nonsquare[shape - 185][0]; sh = cue_nonsquare[shape - 185][1]; }
+
+            synthui_led_button_layout_t Lc;
+            assert(synthui_led_button_compute_layout(sw, sh, false, &Lc));
+            synthui_led_button_px_t box[4];
+            synthui_led_button_cue_boxes(sw, sh, box);
+
+            const synthui_led_button_px_t bz = synthui_led_button_rect_px(&Lc.bezel, 0);
+            const int bw_px = bz.x2 - bz.x1 + 1, bh_px = bz.y2 - bz.y1 + 1;
+            const int side = bw_px < bh_px ? bw_px : bh_px;
+            int R = synthui_led_button_radius_px(Lc.bezel_r);
+            if (R > side / 2) R = side / 2;
+
+            /* structure: inside the bezel, pairwise disjoint */
+            int i, j;
+            for (i = 0; i < 4; ++i) assert(px_contains(&bz, &box[i]));
+            for (i = 0; i < 4; ++i) for (j = i + 1; j < 4; ++j) assert(!px_overlap(&box[i], &box[j]));
+
+            /* coverage, for the cue ring (index 0) and the plain ring (1) */
+            int ring;
+            for (ring = 0; ring < 2; ++ring) {
+                const int bw = ring == 0 ? Lc.cue_bw_px : Lc.bezel_bw_px;
+                const synthui_led_button_px_t inner = { bz.x1 + bw, bz.y1 + bw, bz.x2 - bw, bz.y2 - bw };
+                const int rin = R - bw > 0 ? R - bw : 0;
+                int x, y;
+                for (y = bz.y1; y <= bz.y2; ++y) for (x = bz.x1; x <= bz.x2; ++x) {
+                    if (!(in_rrect(x, y, &bz, R) && !in_rrect(x, y, &inner, rin))) continue;
+                    /* (x,y) is a ring pixel: it and its 8 neighbours inside
+                     * the bezel must each lie in one of the four boxes */
+                    int nx, ny;
+                    for (ny = y - 1; ny <= y + 1; ++ny) for (nx = x - 1; nx <= x + 1; ++nx) {
+                        if (nx < bz.x1 || nx > bz.x2 || ny < bz.y1 || ny > bz.y2) continue;
+                        assert(px_has(&box[0], nx, ny) || px_has(&box[1], nx, ny) ||
+                               px_has(&box[2], nx, ny) || px_has(&box[3], nx, ny));
+                    }
+                }
+            }
+
+            /* engagement: from 64 px up, the four boxes are <= 45 % of the
+             * bezel (swept worst case 36.0 % at 80x85; a whole-key box is
+             * 100 %) */
+            if (side >= 64) {
+                long total = 0;
+                for (i = 0; i < 4; ++i) {
+                    if (px_empty(&box[i])) continue;
+                    total += (long)(box[i].x2 - box[i].x1 + 1) * (box[i].y2 - box[i].y1 + 1);
+                }
+                assert(total * 100 <= (long)bw_px * bh_px * 45);
+            }
+        }
+    }
+
+    /* 100x100 pinned: band = ceil(17 - 13/sqrt2) + 1 = 8 + 1 = 9 */
+    {
+        synthui_led_button_px_t cb[4];
+        synthui_led_button_cue_boxes(100.0f, 100.0f, cb);
+        assert(cb[0].x1 == 0  && cb[0].y1 == 0  && cb[0].x2 == 99 && cb[0].y2 == 8);    /* top */
+        assert(cb[1].x1 == 0  && cb[1].y1 == 91 && cb[1].x2 == 99 && cb[1].y2 == 99);   /* bottom */
+        assert(cb[2].x1 == 0  && cb[2].y1 == 9  && cb[2].x2 == 8  && cb[2].y2 == 90);   /* left */
+        assert(cb[3].x1 == 91 && cb[3].y1 == 9  && cb[3].x2 == 99 && cb[3].y2 == 90);   /* right */
+        /* 120x80: the bezel is the centred 80x80 (ox=20), band 8 */
+        synthui_led_button_cue_boxes(120.0f, 80.0f, cb);
+        assert(cb[0].x1 == 20 && cb[0].x2 == 99 && cb[0].y1 == 0 && cb[0].y2 == 7);
+        assert(cb[3].x1 == 92 && cb[3].x2 == 99);
     }
 
     /* --- 100x100, unpressed: the DC box in pixels, 1 unit = 1 px --- */
@@ -313,6 +429,13 @@ int main(void)
     assert(zb.x1 == 0 && zb.y1 == 0 && zb.x2 == 0 && zb.y2 == 0);
     synthui_led_button_press_box(0.0f, 100.0f, &zb);
     assert(zb.x1 == 0 && zb.y1 == 0 && zb.x2 == 0 && zb.y2 == 0);
+
+    {
+        synthui_led_button_px_t zc[4];
+        synthui_led_button_cue_boxes(0.0f, 100.0f, zc);
+        int i;
+        for (i = 0; i < 4; ++i) assert(zc[i].x1 == 0 && zc[i].y1 == 0 && zc[i].x2 == 0 && zc[i].y2 == 0);
+    }
 
     printf("led_button_test: all PASS\n");
     return 0;
