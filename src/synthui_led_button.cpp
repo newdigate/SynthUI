@@ -111,6 +111,23 @@ static void led_dsc_init(lv_draw_rect_dsc_t *d, synthui_led_button_t *b)
     d->base.obj = (lv_obj_t *)b;
 }
 
+/* NEW-50: a layer is drawn only when its area meets the clip.  LVGL renders
+ * one pass per invalidated area, and lv_draw_rect allocates a draw task
+ * BEFORE any clip test (lv_draw_sw_fill.c:56 / lv_draw_sw_border.c:97 reject
+ * it against t->clip_area, downstream of execute_drawing, after the malloc,
+ * evaluate and dispatch) -- out of a heap in uncached SDRAM, which is why
+ * one extra allocation is not free here (NEW-23 measured that churn at
+ * ~90 us/task).  Without this test the four cue strips cost 4 x 12 draw
+ * tasks where the whole-key invalidate cost 12; with it, bezel
+ * fill + bezel border + well per strip.  slide_toggle, piano_key,
+ * level_meter and seven_segment do the same; this widget was the one that
+ * did not. */
+static bool led_in_clip(const lv_layer_t *layer, const lv_area_t *a)
+{
+    lv_area_t isect;
+    return lv_area_intersect(&isect, a, &layer->_clip_area);
+}
+
 static void led_invalidate_px(lv_obj_t *obj, const synthui_led_button_px_t *px)
 {
     lv_area_t c, a;
@@ -137,6 +154,20 @@ static void led_invalidate_press_box(lv_obj_t *obj)
     synthui_led_button_px_t px;
     synthui_led_button_press_box((float)lv_area_get_width(&c), (float)lv_area_get_height(&c), &px);
     led_invalidate_px(obj, &px);
+}
+
+/* NEW-50: a cue change repaints only the bezel's border ring -- four strips
+ * from the math header, non-overlapping so LVGL never even attempts a join.
+ * Sibling of led_invalidate_lit_box/_press_box; the box shapes are proven on
+ * the host (led_button_test's ring-coverage sweep) and the absence of stale
+ * pixels by the gate's delta-equality guard. */
+static void led_invalidate_cue_boxes(lv_obj_t *obj)
+{
+    lv_area_t c;
+    lv_obj_get_coords(obj, &c);
+    synthui_led_button_px_t px[4];
+    synthui_led_button_cue_boxes((float)lv_area_get_width(&c), (float)lv_area_get_height(&c), px);
+    for (int i = 0; i < 4; i++) led_invalidate_px(obj, &px[i]);
 }
 
 /* A finger went down or came up.  The press box does not depend on the press
@@ -222,7 +253,7 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
 
     /* 1. bezel (never moves): fill + border, the SVG stroke drawn inside the extent */
     led_area(&a, &c, &L.bezel, 0);
-    {
+    if (led_in_clip(layer, &a)) {
         lv_draw_rect_dsc_t d;
         led_dsc_init(&d, b);
         d.bg_color = lv_color_hex(SYNTHUI_LED_BUTTON_BEZEL);
@@ -237,7 +268,9 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
 
     /* 2. well (never moves) */
     led_area(&a, &c, &L.well, 0);
-    led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, synthui_led_button_radius_px(L.well_r));
+    if (led_in_clip(layer, &a)) {
+        led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, synthui_led_button_radius_px(L.well_r));
+    }
 
     /* 3. cap: solid mid under two 2-stop halves (LV_GRADIENT_MAX_STOPS is 2).
      * LVGL rounds all four corners of EACH half, not just the outer two, so
@@ -247,46 +280,64 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
      * solid layer's.  Both are deterministic, visually negligible, and
      * pinned by the golden -- not an approximation being waved away. */
     led_area(&a, &c, &L.cap, dy);
-    led_fill(layer, b, &a, P.cap_mid, LV_OPA_COVER, synthui_led_button_radius_px(L.cap_r));
+    if (led_in_clip(layer, &a)) {
+        led_fill(layer, b, &a, P.cap_mid, LV_OPA_COVER, synthui_led_button_radius_px(L.cap_r));
+    }
     led_area(&a, &c, &L.cap_top, dy);
-    led_grad(layer, b, &a, P.cap_top, P.cap_mid, synthui_led_button_radius_px(L.cap_r));
+    if (led_in_clip(layer, &a)) {
+        led_grad(layer, b, &a, P.cap_top, P.cap_mid, synthui_led_button_radius_px(L.cap_r));
+    }
     led_area(&a, &c, &L.cap_low, dy);
-    led_grad(layer, b, &a, P.cap_mid, P.cap_low, synthui_led_button_radius_px(L.cap_r));
+    if (led_in_clip(layer, &a)) {
+        led_grad(layer, b, &a, P.cap_mid, P.cap_low, synthui_led_button_radius_px(L.cap_r));
+    }
 
     /* 4. highlight */
     led_area(&a, &c, &L.highlight, dy);
-    led_fill(layer, b, &a, 0xFFFFFFu, P.highlight_opa, synthui_led_button_radius_px(L.highlight_r));
+    if (led_in_clip(layer, &a)) {
+        led_fill(layer, b, &a, 0xFFFFFFu, P.highlight_opa, synthui_led_button_radius_px(L.highlight_r));
+    }
 
     /* 5. halo: a 10-unit border on the LED grown by 5; the LED fill covers
      * the inner half, which is what SVG's stroke-over-fill produces */
     if (P.halo_on) {
         led_area(&a, &c, &L.halo, dy);
-        lv_draw_rect_dsc_t d;
-        led_dsc_init(&d, b);
-        d.bg_opa = LV_OPA_TRANSP;
-        d.radius = synthui_led_button_radius_px(L.halo_r);
-        d.border_color = lv_color_hex(P.halo_color);
-        d.border_width = L.halo_bw_px;
-        d.border_opa = SYNTHUI_LED_BUTTON_HALO_OPA;
-        d.border_side = LV_BORDER_SIDE_FULL;
-        lv_draw_rect(layer, &d, &a);
+        if (led_in_clip(layer, &a)) {
+            lv_draw_rect_dsc_t d;
+            led_dsc_init(&d, b);
+            d.bg_opa = LV_OPA_TRANSP;
+            d.radius = synthui_led_button_radius_px(L.halo_r);
+            d.border_color = lv_color_hex(P.halo_color);
+            d.border_width = L.halo_bw_px;
+            d.border_opa = SYNTHUI_LED_BUTTON_HALO_OPA;
+            d.border_side = LV_BORDER_SIDE_FULL;
+            lv_draw_rect(layer, &d, &a);
+        }
     }
 
     /* 6. LED */
     led_area(&a, &c, &L.led, dy);
-    led_fill(layer, b, &a, P.led_fill, LV_OPA_COVER, synthui_led_button_radius_px(L.led_r));
+    if (led_in_clip(layer, &a)) {
+        led_fill(layer, b, &a, P.led_fill, LV_OPA_COVER, synthui_led_button_radius_px(L.led_r));
+    }
 
     /* 7. moulding dots (dropped below 34 px) */
     if (L.dots_visible) {
         led_circle_area(&a, &c, &L.dot1, dy);
-        led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        if (led_in_clip(layer, &a)) {
+            led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        }
         led_circle_area(&a, &c, &L.dot2, dy);
-        led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        if (led_in_clip(layer, &a)) {
+            led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        }
     }
 
     /* 8. base */
     led_area(&a, &c, &L.base, dy);
-    led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_BASE, P.base_opa, synthui_led_button_radius_px(L.base_r));
+    if (led_in_clip(layer, &a)) {
+        led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_BASE, P.base_opa, synthui_led_button_radius_px(L.base_r));
+    }
 }
 
 /* --- setters: early-return on no change, invalidate only the box painted --- */
@@ -328,7 +379,7 @@ void synthui_led_button_set_cue(lv_obj_t *obj, bool cue)
     synthui_led_button_t *b = (synthui_led_button_t *)obj;
     if (b->cue == cue) return;
     b->cue = cue;
-    lv_obj_invalidate(obj);   /* the bezel ring is the outer edge on four sides */
+    led_invalidate_cue_boxes(obj);
 }
 
 bool synthui_led_button_get_cue(const lv_obj_t *obj)
