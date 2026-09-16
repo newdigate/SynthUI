@@ -4,7 +4,6 @@
 #include "synthui_led_button.h"
 #include "synthui_led_button_math.h"
 #include <lvgl_private.h>
-#include <math.h>
 
 #define MY_CLASS (&synthui_led_button_class)
 
@@ -100,10 +99,16 @@ static void led_circle_area(lv_area_t *out, const lv_area_t *c, const synthui_le
     led_px_to_area(out, c, &px);
 }
 
-static int32_t led_radius(float v)   /* radii: at least 1 px */
+/* Every rect drawn here carries base.obj: on the software path the ONLY
+ * thing LVGL reads it for is LV_EVENT_DRAW_TASK_ADDED (lv_draw.c, behind
+ * LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS), which is how synthui_led_button_test
+ * counts draw tasks per setter (NEW-50).  lv_draw_rect_dsc_init leaves it
+ * NULL, and a widget whose tasks cannot be attributed cannot be
+ * instrumented.  Pixel-neutral: the goldens prove it. */
+static void led_dsc_init(lv_draw_rect_dsc_t *d, synthui_led_button_t *b)
 {
-    const int32_t p = (int32_t)lroundf(v);
-    return p < 1 ? 1 : p;
+    lv_draw_rect_dsc_init(d);
+    d->base.obj = (lv_obj_t *)b;
 }
 
 static void led_invalidate_px(lv_obj_t *obj, const synthui_led_button_px_t *px)
@@ -169,20 +174,22 @@ static void led_event(const lv_obj_class_t *cls, lv_event_t *e)
     }
 }
 
-static void led_fill(lv_layer_t *layer, const lv_area_t *a, uint32_t hex, lv_opa_t opa, int32_t radius)
+static void led_fill(lv_layer_t *layer, synthui_led_button_t *b, const lv_area_t *a,
+                     uint32_t hex, lv_opa_t opa, int32_t radius)
 {
     lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
+    led_dsc_init(&d, b);
     d.bg_color = lv_color_hex(hex);
     d.bg_opa = opa;
     d.radius = radius;
     lv_draw_rect(layer, &d, a);
 }
 
-static void led_grad(lv_layer_t *layer, const lv_area_t *a, uint32_t top, uint32_t bottom, int32_t radius)
+static void led_grad(lv_layer_t *layer, synthui_led_button_t *b, const lv_area_t *a,
+                     uint32_t top, uint32_t bottom, int32_t radius)
 {
     lv_draw_rect_dsc_t d;
-    lv_draw_rect_dsc_init(&d);
+    led_dsc_init(&d, b);
     d.bg_opa = LV_OPA_COVER;
     d.bg_grad.dir = LV_GRAD_DIR_VER;
     d.bg_grad.stops_count = 2;
@@ -217,10 +224,10 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
     led_area(&a, &c, &L.bezel, 0);
     {
         lv_draw_rect_dsc_t d;
-        lv_draw_rect_dsc_init(&d);
+        led_dsc_init(&d, b);
         d.bg_color = lv_color_hex(SYNTHUI_LED_BUTTON_BEZEL);
         d.bg_opa = LV_OPA_COVER;
-        d.radius = led_radius(L.bezel_r);
+        d.radius = synthui_led_button_radius_px(L.bezel_r);
         d.border_color = lv_color_hex(P.bezel_color);
         d.border_width = P.cue_border ? L.cue_bw_px : L.bezel_bw_px;  /* same source as bezel_color */
         d.border_opa = LV_OPA_COVER;
@@ -230,7 +237,7 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
 
     /* 2. well (never moves) */
     led_area(&a, &c, &L.well, 0);
-    led_fill(layer, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, led_radius(L.well_r));
+    led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_WELL, SYNTHUI_LED_BUTTON_WELL_OPA, synthui_led_button_radius_px(L.well_r));
 
     /* 3. cap: solid mid under two 2-stop halves (LV_GRADIENT_MAX_STOPS is 2).
      * LVGL rounds all four corners of EACH half, not just the outer two, so
@@ -240,24 +247,24 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
      * solid layer's.  Both are deterministic, visually negligible, and
      * pinned by the golden -- not an approximation being waved away. */
     led_area(&a, &c, &L.cap, dy);
-    led_fill(layer, &a, P.cap_mid, LV_OPA_COVER, led_radius(L.cap_r));
+    led_fill(layer, b, &a, P.cap_mid, LV_OPA_COVER, synthui_led_button_radius_px(L.cap_r));
     led_area(&a, &c, &L.cap_top, dy);
-    led_grad(layer, &a, P.cap_top, P.cap_mid, led_radius(L.cap_r));
+    led_grad(layer, b, &a, P.cap_top, P.cap_mid, synthui_led_button_radius_px(L.cap_r));
     led_area(&a, &c, &L.cap_low, dy);
-    led_grad(layer, &a, P.cap_mid, P.cap_low, led_radius(L.cap_r));
+    led_grad(layer, b, &a, P.cap_mid, P.cap_low, synthui_led_button_radius_px(L.cap_r));
 
     /* 4. highlight */
     led_area(&a, &c, &L.highlight, dy);
-    led_fill(layer, &a, 0xFFFFFFu, P.highlight_opa, led_radius(L.highlight_r));
+    led_fill(layer, b, &a, 0xFFFFFFu, P.highlight_opa, synthui_led_button_radius_px(L.highlight_r));
 
     /* 5. halo: a 10-unit border on the LED grown by 5; the LED fill covers
      * the inner half, which is what SVG's stroke-over-fill produces */
     if (P.halo_on) {
         led_area(&a, &c, &L.halo, dy);
         lv_draw_rect_dsc_t d;
-        lv_draw_rect_dsc_init(&d);
+        led_dsc_init(&d, b);
         d.bg_opa = LV_OPA_TRANSP;
-        d.radius = led_radius(L.halo_r);
+        d.radius = synthui_led_button_radius_px(L.halo_r);
         d.border_color = lv_color_hex(P.halo_color);
         d.border_width = L.halo_bw_px;
         d.border_opa = SYNTHUI_LED_BUTTON_HALO_OPA;
@@ -267,19 +274,19 @@ static void led_draw(synthui_led_button_t *b, lv_layer_t *layer)
 
     /* 6. LED */
     led_area(&a, &c, &L.led, dy);
-    led_fill(layer, &a, P.led_fill, LV_OPA_COVER, led_radius(L.led_r));
+    led_fill(layer, b, &a, P.led_fill, LV_OPA_COVER, synthui_led_button_radius_px(L.led_r));
 
     /* 7. moulding dots (dropped below 34 px) */
     if (L.dots_visible) {
         led_circle_area(&a, &c, &L.dot1, dy);
-        led_fill(layer, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
         led_circle_area(&a, &c, &L.dot2, dy);
-        led_fill(layer, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
+        led_fill(layer, b, &a, 0x000000u, SYNTHUI_LED_BUTTON_DOT_OPA, LV_RADIUS_CIRCLE);
     }
 
     /* 8. base */
     led_area(&a, &c, &L.base, dy);
-    led_fill(layer, &a, SYNTHUI_LED_BUTTON_BASE, P.base_opa, led_radius(L.base_r));
+    led_fill(layer, b, &a, SYNTHUI_LED_BUTTON_BASE, P.base_opa, synthui_led_button_radius_px(L.base_r));
 }
 
 /* --- setters: early-return on no change, invalidate only the box painted --- */
