@@ -1,4 +1,5 @@
 # SynthUI
+[SynthUI/Index](https://newdigate.github.io/SynthUI/Index.dc.html)
 
 Synth control-surface widgets for LVGL on the i.MX RT1176 / MIMXRT1170-EVKB —
 knobs, faders, lamps, LED buttons, level meters, piano keys, seven-segment
