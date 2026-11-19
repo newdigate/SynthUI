@@ -371,7 +371,9 @@ void synthui_waveform_compose_into(uint8_t *buf)
         wf_t *w = s_widgets[i];
         if (!w || !(w->dirty_lane || w->dirty_rail) || !w->strip || !w->rail) continue;
         if (lv_obj_get_screen(&w->obj) != lv_display_get_screen_active(lv_obj_get_display(&w->obj))) continue;
-        if (lv_obj_has_flag_any(&w->obj, LV_OBJ_FLAG_HIDDEN)) continue;
+        /* hidden itself, or inside something hidden: its dirty flags wait until it is shown
+         * (showing it invalidates it, DRAW_MAIN then asks for both parts) */
+        if (!lv_obj_is_visible(&w->obj)) continue;
         compose(w, buf);
     }
 }
@@ -549,6 +551,7 @@ static void wf_event(const lv_obj_class_t *cls, lv_event_t *e)
     case LV_EVENT_PRESSING:   wf_pressing(w); break;
     case LV_EVENT_RELEASED:   wf_released(w, false); break;
     case LV_EVENT_PRESS_LOST: wf_released(w, true); break;
+    case LV_EVENT_DELETE:     wf_released(w, true); break;   /* a grab in progress still gets its GRAB_END */
     default:
         break;
     }
@@ -559,6 +562,7 @@ void synthui_waveform_set_tables(lv_obj_t *obj, const synthui_wave_table_t *tabl
                                  uint8_t channels, uint64_t total_frames, uint32_t sample_rate)
 {
     wf_t *w = (wf_t *)obj;
+    wf_released(w, true);                                /* a new track ends a grab on the old one */
     w->tables = (tables && n) ? tables : NULL;
     w->ntables = w->tables ? (n > MAX_TABLES ? MAX_TABLES : n) : 0;
     w->channels = channels == 1 ? 1 : 2;
