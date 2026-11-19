@@ -43,8 +43,19 @@ typedef struct {
     uint64_t strip_valid, rail_valid;
     int64_t  strip_cue;
     bool     strip_ok, rail_ok;        /* false = redraw in full at the next compose */
-    bool     dirty;                    /* something changed since the last compose */
+    /* What changed since the last compose.  The lane changes on every frame
+     * while tracking; the rail only when one of its markers moves a pixel, so
+     * it is recomposed (and its area invalidated) separately: copying and
+     * presenting it every frame cost 7 fps on the Nosh board. */
+    bool     dirty_lane, dirty_rail;
+    int      r_head, r_w0, r_w1, r_cue;   /* rail marker x positions as last composed */
+    /* input: anchored on PRESSED, mapped from the TOTAL displacement (the fader's rule) */
+    uint8_t  press;                    /* PRESS_NONE .. */
+    int32_t  press_x;
+    double   press_frame;              /* GRAB: the head frame at the press; SCROLL: the view's left edge */
+    double   last_frame;               /* the last GRAB_MOVE / SEEK frame sent */
 } wf_t;
+enum { PRESS_NONE, PRESS_GRAB, PRESS_SCROLL, PRESS_RAIL, PRESS_CHEVRON };
 
 static void wf_constructor(const lv_obj_class_t *cls, lv_obj_t *obj);
 static void wf_destructor(const lv_obj_class_t *cls, lv_obj_t *obj);
@@ -79,6 +90,7 @@ void synthui_waveform_set_platform(const synthui_waveform_platform_t *p)
 }
 
 static wf_t *s_widgets[MAX_WIDGETS];
+static void wf_released(wf_t *w, bool lost);
 
 /* ---- helpers ----------------------------------------------------------- */
 static inline int64_t floor_div(double a, double b) { return (int64_t)floor(a / b); }
@@ -87,11 +99,55 @@ static inline int ring_x(const wf_t *w, int64_t g)
     int64_t m = g % (int64_t)w->sw;
     return (int)(m < 0 ? m + w->sw : m);
 }
-static void touch(wf_t *w) { w->dirty = true; lv_obj_invalidate(&w->obj); }
+static double view_start(const wf_t *w);
+static void lane_area(const wf_t *w, lv_area_t *a)
+{
+    lv_obj_get_coords(&w->obj, a);
+    a->y2 = a->y1 + w->sh - 1;
+}
+static void rail_area(const wf_t *w, lv_area_t *a)
+{
+    lv_obj_get_coords(&w->obj, a);
+    a->y1 = a->y1 + w->sh;
+}
+/* Where the rail's markers belong now: playhead, view window edges, cue. */
+static void rail_marks(const wf_t *w, int *head, int *w0, int *w1, int *cue)
+{
+    if (w->total == 0 || w->sw == 0) { *head = *w0 = *w1 = *cue = -1; return; }
+    const double rz = (double)w->total / (double)w->sw;
+    const double vs = (double)floor(view_start(w) / w->zoom) * w->zoom;
+    *head = synthui_wave_frame_to_x(w->pos, 0.0, rz);
+    *w0 = synthui_wave_frame_to_x(vs, 0.0, rz);
+    *w1 = synthui_wave_frame_to_x(vs + (double)w->sw * w->zoom, 0.0, rz);
+    if (*w0 < 0) *w0 = 0;
+    if (*w1 > w->sw - 1) *w1 = w->sw - 1;
+    *cue = w->cue >= 0 ? synthui_wave_frame_to_x((double)w->cue, 0.0, rz) : -1;
+}
+/* Everything changed. */
+static void touch(wf_t *w) { w->dirty_lane = w->dirty_rail = true; lv_obj_invalidate(&w->obj); }
+/* The view moved (position, scroll): the lane, and the rail only if a marker moved. */
+static void touch_view(wf_t *w)
+{
+    if (w->sw == 0) { touch(w); return; }
+    lv_area_t a;
+    w->dirty_lane = true;
+    lane_area(w, &a);
+    lv_obj_invalidate_area(&w->obj, &a);
+    int h, w0, w1, c;
+    rail_marks(w, &h, &w0, &w1, &c);
+    if (h != w->r_head || w0 != w->r_w0 || w1 != w->r_w1 || c != w->r_cue) {
+        w->dirty_rail = true;
+        rail_area(w, &a);
+        lv_obj_invalidate_area(&w->obj, &a);
+    }
+}
 
 static double clamp_zoom(const wf_t *w, double z)
 {
     const uint32_t finest = (w->tables && w->ntables) ? w->tables[0].frames_per_pt : 128u;
+    /* Before the first layout the lane has no width, so the far limit is not
+     * known yet: keep what was asked for (compose clamps again once it is). */
+    if (w->sw <= 0) return (z >= (double)finest) ? z : (double)finest;
     return synthui_wave_zoom_clamp(z, (double)w->total, w->sw, finest ? finest : 1u);
 }
 
@@ -168,7 +224,7 @@ static void strip_range(wf_t *w, int64_t ga, int64_t gb)       /* [ga, gb), clip
     for (int64_t g = ga; g < gb; g++) strip_col(w, g, stride);
 }
 static double view_start(const wf_t *w)
-{
+{   /* (declared above) */
     return synthui_wave_view_start(w->pos, w->sw, w->zoom, w->tracking, w->scroll, (double)w->total);
 }
 static void strip_sync(wf_t *w)
@@ -274,34 +330,38 @@ static void compose(wf_t *w, uint8_t *buf)
     strip_sync(w);
     rail_sync(w);
 
-    /* the ring: strip columns [x0, sw) are the lane's left part */
-    const int x0 = ring_x(w, w->g0), w1 = w->sw - x0;
-    s_plat.blit(w->strip + x0, (uint32_t)w->sw * 4u, lane, pitch, (uint16_t)w1, (uint16_t)w->sh);
-    if (x0) s_plat.blit(w->strip, (uint32_t)w->sw * 4u, lane + w1, pitch, (uint16_t)x0, (uint16_t)w->sh);
     uint32_t *railp = (uint32_t *)((uint8_t *)lane + (size_t)w->sh * pitch);
-    s_plat.blit(w->rail, (uint32_t)w->sw * 4u, railp, pitch, (uint16_t)w->sw, (uint16_t)RAIL_BUF_H);
-    if (w->total == 0) return;
-
-    /* playhead on the lane */
-    const surf_t ls = { lane, (uint32_t)hres, w->sw, w->sh };
     const double vs = (double)w->g0 * w->strip_zoom;
-    const int hx = w->tracking ? w->sw / 2 : synthui_wave_frame_to_x(w->pos, vs, w->strip_zoom);
-    if (hx < 0) chevron(&ls, -1);
-    else if (hx >= w->sw) chevron(&ls, +1);
-    else { vline(&ls, hx, 0, w->sh - 1, 2, C_HEAD); head_flag(&ls, hx, 0); }
 
-    /* view window, cue and playhead on the rail */
-    const surf_t rs = { railp + (uint32_t)SYNTHUI_WAVEFORM_GAP * (uint32_t)hres, (uint32_t)hres, w->sw, SYNTHUI_WAVEFORM_RAIL_H };
-    const double rz = (double)w->total / (double)w->sw;
-    int wx0 = synthui_wave_frame_to_x(vs, 0.0, rz), wx1 = synthui_wave_frame_to_x(vs + (double)w->sw * w->strip_zoom, 0.0, rz);
-    if (wx0 < 0) wx0 = 0;
-    if (wx1 > w->sw - 1) wx1 = w->sw - 1;
-    if (wx1 > wx0) {
-        hline(&rs, wx0, wx1, 0, C_WINDOW); hline(&rs, wx0, wx1, rs.h - 1, C_WINDOW);
-        vline(&rs, wx0, 0, rs.h - 1, 1, C_WINDOW); vline(&rs, wx1, 0, rs.h - 1, 1, C_WINDOW);
+    if (w->dirty_lane) {
+        /* the ring: strip columns [x0, sw) are the lane's left part */
+        const int x0 = ring_x(w, w->g0), w1 = w->sw - x0;
+        s_plat.blit(w->strip + x0, (uint32_t)w->sw * 4u, lane, pitch, (uint16_t)w1, (uint16_t)w->sh);
+        if (x0) s_plat.blit(w->strip, (uint32_t)w->sw * 4u, lane + w1, pitch, (uint16_t)x0, (uint16_t)w->sh);
+        if (w->total) {                                  /* playhead */
+            const surf_t ls = { lane, (uint32_t)hres, w->sw, w->sh };
+            const int hx = w->tracking ? w->sw / 2 : synthui_wave_frame_to_x(w->pos, vs, w->strip_zoom);
+            if (hx < 0) chevron(&ls, -1);
+            else if (hx >= w->sw) chevron(&ls, +1);
+            else { vline(&ls, hx, 0, w->sh - 1, 2, C_HEAD); head_flag(&ls, hx, 0); }
+        }
+        w->dirty_lane = false;
     }
-    if (w->cue >= 0) vline(&rs, synthui_wave_frame_to_x((double)w->cue, 0.0, rz), 0, 9, 1, C_HEAD);
-    vline(&rs, synthui_wave_frame_to_x(w->pos, 0.0, rz), 0, rs.h - 1, 2, C_HEAD);
+    if (w->dirty_rail) {
+        s_plat.blit(w->rail, (uint32_t)w->sw * 4u, railp, pitch, (uint16_t)w->sw, (uint16_t)RAIL_BUF_H);
+        rail_marks(w, &w->r_head, &w->r_w0, &w->r_w1, &w->r_cue);
+        if (w->total) {                                  /* view window, cue and playhead */
+            const surf_t rs = { railp + (uint32_t)SYNTHUI_WAVEFORM_GAP * (uint32_t)hres, (uint32_t)hres, w->sw, SYNTHUI_WAVEFORM_RAIL_H };
+            const int wx0 = w->r_w0, wx1 = w->r_w1;
+            if (wx1 > wx0) {
+                hline(&rs, wx0, wx1, 0, C_WINDOW); hline(&rs, wx0, wx1, rs.h - 1, C_WINDOW);
+                vline(&rs, wx0, 0, rs.h - 1, 1, C_WINDOW); vline(&rs, wx1, 0, rs.h - 1, 1, C_WINDOW);
+            }
+            if (w->r_cue >= 0) vline(&rs, w->r_cue, 0, 9, 1, C_HEAD);
+            vline(&rs, w->r_head, 0, rs.h - 1, 2, C_HEAD);
+        }
+        w->dirty_rail = false;
+    }
 }
 
 void synthui_waveform_compose_into(uint8_t *buf)
@@ -309,12 +369,98 @@ void synthui_waveform_compose_into(uint8_t *buf)
     if (!buf) return;
     for (int i = 0; i < MAX_WIDGETS; i++) {
         wf_t *w = s_widgets[i];
-        if (!w || !w->dirty || !w->strip || !w->rail) continue;
+        if (!w || !(w->dirty_lane || w->dirty_rail) || !w->strip || !w->rail) continue;
         if (lv_obj_get_screen(&w->obj) != lv_display_get_screen_active(lv_obj_get_display(&w->obj))) continue;
         if (lv_obj_has_flag_any(&w->obj, LV_OBJ_FLAG_HIDDEN)) continue;
         compose(w, buf);
-        w->dirty = false;
     }
+}
+
+/* ---- input ------------------------------------------------------------- */
+lv_event_code_t synthui_waveform_event(synthui_wave_ev_t which)
+{
+    static lv_event_code_t codes[5];
+    static bool registered = false;
+    if (!registered) {
+        for (int i = 0; i < 5; i++) codes[i] = (lv_event_code_t)lv_event_register_id();
+        registered = true;
+    }
+    return codes[(unsigned)which < 5u ? which : 0];
+}
+static void send(wf_t *w, synthui_wave_ev_t ev, double frame)
+{
+    w->last_frame = frame;
+    lv_obj_send_event(&w->obj, synthui_waveform_event(ev), ev == SYNTHUI_WAVE_EV_TRACK_REQUEST ? NULL : &frame);
+}
+/* The press point relative to the widget; false when there is no pointer. */
+static bool local_point(const wf_t *w, int32_t *x, int32_t *y)
+{
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return false;
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    lv_area_t a;
+    lv_obj_get_coords(&w->obj, &a);
+    *x = p.x - a.x1; *y = p.y - a.y1;
+    return true;
+}
+static double rail_frame(const wf_t *w, int32_t x)
+{
+    if (x < 0) x = 0;
+    if (x > w->sw - 1) x = w->sw - 1;
+    return (double)((uint64_t)x * w->total / (uint64_t)w->sw);
+}
+static void wf_pressed(wf_t *w)
+{
+    int32_t x, y;
+    w->press = PRESS_NONE;
+    if (w->total == 0 || w->sw == 0 || !local_point(w, &x, &y)) return;
+    w->press_x = x;
+    if (y >= w->sh + SYNTHUI_WAVEFORM_GAP) {
+        w->press = PRESS_RAIL;
+        send(w, SYNTHUI_WAVE_EV_SEEK, rail_frame(w, x));
+    } else if (y < w->sh) {
+        if (w->tracking) {
+            w->press = PRESS_GRAB;
+            w->press_frame = w->pos;
+            send(w, SYNTHUI_WAVE_EV_GRAB_BEGIN, w->pos);
+        } else {
+            const double vs = view_start(w);
+            const int hx = synthui_wave_frame_to_x(w->pos, vs, w->zoom);
+            const bool off_left = hx < 0, off_right = hx >= w->sw;
+            const bool near_mid = y > w->sh / 2 - 40 && y < w->sh / 2 + 40;
+            if (near_mid && ((off_left && x < 48) || (off_right && x >= w->sw - 48))) {
+                w->press = PRESS_CHEVRON;
+            } else {
+                w->press = PRESS_SCROLL;
+                w->press_frame = vs;
+            }
+        }
+    }
+}
+static void wf_pressing(wf_t *w)
+{
+    int32_t x, y;
+    if (w->press == PRESS_NONE || w->press == PRESS_CHEVRON || !local_point(w, &x, &y)) return;
+    const int dx = (int)(x - w->press_x);
+    if (w->press == PRESS_GRAB) {
+        const double f = synthui_wave_grab_frame(w->press_frame, dx, w->zoom, (double)w->total);
+        if (f != w->last_frame) send(w, SYNTHUI_WAVE_EV_GRAB_MOVE, f);
+    } else if (w->press == PRESS_SCROLL) {
+        const double want = synthui_wave_view_start(w->pos, w->sw, w->zoom, 0,
+                                                    w->press_frame - (double)dx * w->zoom, (double)w->total);
+        if (want != w->scroll) { w->scroll = want; touch_view(w); }
+    } else if (w->press == PRESS_RAIL) {
+        const double f = rail_frame(w, x);
+        if (f != w->last_frame) send(w, SYNTHUI_WAVE_EV_SEEK, f);
+    }
+}
+static void wf_released(wf_t *w, bool lost)
+{
+    const uint8_t was = w->press;
+    w->press = PRESS_NONE;                               /* first: a handler may re-enter */
+    if (was == PRESS_GRAB) send(w, SYNTHUI_WAVE_EV_GRAB_END, w->last_frame);
+    else if (was == PRESS_CHEVRON && !lost) send(w, SYNTHUI_WAVE_EV_TRACK_REQUEST, 0.0);
 }
 
 /* ---- class ------------------------------------------------------------- */
@@ -341,7 +487,7 @@ static void buffers(wf_t *w)
     w->rail  = (uint32_t *)(((uintptr_t)w->rail_raw + 63u) & ~(uintptr_t)63u);
     w->sw = sw; w->sh = sh;
     w->strip_ok = w->rail_ok = false;
-    w->dirty = true;
+    w->dirty_lane = w->dirty_rail = true;
 }
 
 lv_obj_t *synthui_waveform_create(lv_obj_t *parent)
@@ -359,7 +505,8 @@ static void wf_constructor(const lv_obj_class_t *cls, lv_obj_t *obj)
     w->tracking = true;
     w->cue = w->strip_cue = -1;
     w->channels = 2;
-    w->dirty = true;
+    w->dirty_lane = w->dirty_rail = true;
+    w->r_head = w->r_w0 = w->r_w1 = w->r_cue = -1;
     for (int i = 0; i < MAX_WIDGETS; i++) if (!s_widgets[i]) { s_widgets[i] = w; break; }
     lv_obj_remove_flag(obj, (lv_obj_flag_t)(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN));
 }
@@ -390,8 +537,18 @@ static void wf_event(const lv_obj_class_t *cls, lv_event_t *e)
         /* LVGL is redrawing this area for a reason of its own: whatever it
          * leaves here is replaced by the compose hook. */
         if (!w->strip) buffers(w);
-        w->dirty = true;
+        {   /* recompose whichever part LVGL's clip area touches */
+            const lv_layer_t *layer = lv_event_get_layer(e);
+            lv_area_t la, ra, x;
+            lane_area(w, &la); rail_area(w, &ra);
+            if (!layer || lv_area_intersect(&x, &layer->_clip_area, &la)) w->dirty_lane = true;
+            if (!layer || lv_area_intersect(&x, &layer->_clip_area, &ra)) w->dirty_rail = true;
+        }
         break;
+    case LV_EVENT_PRESSED:    wf_pressed(w); break;
+    case LV_EVENT_PRESSING:   wf_pressing(w); break;
+    case LV_EVENT_RELEASED:   wf_released(w, false); break;
+    case LV_EVENT_PRESS_LOST: wf_released(w, true); break;
     default:
         break;
     }
@@ -414,8 +571,10 @@ void synthui_waveform_set_tables(lv_obj_t *obj, const synthui_wave_table_t *tabl
 void synthui_waveform_clear(lv_obj_t *obj)
 {
     wf_t *w = (wf_t *)obj;
+    wf_released(w, true);                                /* a grab in progress still gets its GRAB_END */
     w->tables = NULL; w->ntables = 0; w->total = w->valid = 0;
     w->beats = NULL; w->nbeats = 0; w->cue = -1; w->pos = 0.0; w->scroll = 0.0;
+    w->press = PRESS_NONE;
     w->strip_ok = w->rail_ok = false;
     touch(w);
 }
@@ -434,7 +593,7 @@ void synthui_waveform_set_position(lv_obj_t *obj, double frame)
     if (w->total && frame > (double)(w->total - 1)) frame = (double)(w->total - 1);
     if (frame == w->pos) return;
     w->pos = frame;
-    touch(w);
+    touch_view(w);
 }
 void synthui_waveform_set_zoom(lv_obj_t *obj, double frames_per_px)
 {
@@ -480,6 +639,7 @@ void synthui_waveform_set_beats(lv_obj_t *obj, const synthui_wave_beat_t *beats,
     w->strip_ok = false;
     touch(w);
 }
+double synthui_waveform_get_view_start(const lv_obj_t *obj) { return view_start((const wf_t *)obj); }
 uint32_t synthui_waveform_grid_columns(const lv_obj_t *obj)
 {
     const wf_t *w = (const wf_t *)obj;

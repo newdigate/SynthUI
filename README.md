@@ -8,6 +8,9 @@ voice, transport, step sequencer).
 Status: reference material plus three widgets — `src/synthui_rotary_knob`
 (two-engine: LVGL-sw + optional GC355 compositor in `src/vglite/`),
 `src/synthui_step`, and `src/synthui_fader` (LVGL-sw, delta rendering).
+`src/synthui_waveform` is an audio-file view (scrolling min/max lane with a fixed
+playhead, beat grid, cue, zoom and an overview rail); it composes its own pixels
+from a display hook with a platform blit, see the header.
 Drag math is host-tested in `tests/`, run via `tests/run.sh`.
 
 ## Layout

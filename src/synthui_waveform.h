@@ -86,6 +86,31 @@ bool   synthui_waveform_get_tracking(const lv_obj_t *obj);
 void   synthui_waveform_set_cue(lv_obj_t *obj, int64_t frame);          /* < 0 = none */
 void   synthui_waveform_set_beats(lv_obj_t *obj, const synthui_wave_beat_t *beats, uint32_t n);  /* pointer kept; sorted */
 
+/* Gestures.  The widget REPORTS them; it never moves its own position and
+ * never touches audio.  Add a handler with
+ *     lv_obj_add_event_cb(obj, cb, synthui_waveform_event(SYNTHUI_WAVE_EV_...), user);
+ * The event parameter is a `const double *` frame, or NULL where noted.
+ *
+ *   tracking ON, drag on the lane: GRAB_BEGIN (the frame at the head), then
+ *     GRAB_MOVE with the frame the finger has pulled the head to (finger right
+ *     = earlier), then exactly one GRAB_END, also when the press is lost.
+ *   tracking OFF, drag on the lane: the widget scrolls its own view; no event.
+ *     A tap on the edge chevron (shown when the head is off the view) sends
+ *     TRACK_REQUEST (param NULL).
+ *   press or drag on the overview rail, either mode: SEEK with the frame
+ *     under the finger. */
+typedef enum {
+    SYNTHUI_WAVE_EV_GRAB_BEGIN,
+    SYNTHUI_WAVE_EV_GRAB_MOVE,
+    SYNTHUI_WAVE_EV_GRAB_END,
+    SYNTHUI_WAVE_EV_SEEK,
+    SYNTHUI_WAVE_EV_TRACK_REQUEST
+} synthui_wave_ev_t;
+lv_event_code_t synthui_waveform_event(synthui_wave_ev_t which);
+
+/* Frame at the lane's left edge (negative before the track's start). */
+double synthui_waveform_get_view_start(const lv_obj_t *obj);
+
 /* Diagnostic: how many lane columns currently carry a beat line. */
 uint32_t synthui_waveform_grid_columns(const lv_obj_t *obj);
 
